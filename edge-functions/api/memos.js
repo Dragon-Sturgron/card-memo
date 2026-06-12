@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'card_memo_data'
 const MAX_MEMOS = 5000
 const MAX_CATEGORIES = 200
+const AUTH_COOKIE_NAME = 'memo_auth'
 
 async function handleRequest(context) {
   const request = context.request
@@ -10,7 +11,7 @@ async function handleRequest(context) {
   }
 
   try {
-    const authError = checkAuth(context)
+    const authError = await checkAuth(context)
     if (authError) return authError
 
     const kv = getKV(context)
@@ -51,7 +52,7 @@ async function handleRequest(context) {
 
       const payload = {
         app: 'card-memo',
-        version: 2,
+        version: 3,
         updatedAt: new Date().toISOString(),
         categories,
         memos
@@ -89,8 +90,16 @@ function getEnvValue(context, name) {
   return ''
 }
 
-function checkAuth(context) {
-  const expectedPassword = getEnvValue(context, 'MEMO_PASSWORD').trim() || getEnvValue(context, 'MEMO_TOKEN').trim()
+function getMemoPassword(context) {
+  return getEnvValue(context, 'MEMO_PASSWORD').trim() || getEnvValue(context, 'ADMIN').trim()
+}
+
+function getAuthSecret(context) {
+  return getEnvValue(context, 'AUTH_SECRET').trim() || getEnvValue(context, 'MEMO_AUTH_SECRET').trim() || getMemoPassword(context)
+}
+
+async function checkAuth(context) {
+  const expectedPassword = getMemoPassword(context)
 
   if (!expectedPassword) {
     return json(
@@ -102,14 +111,53 @@ function checkAuth(context) {
     )
   }
 
-  const request = context.request
-  const actualPassword = request.headers.get('X-Memo-Password') || request.headers.get('X-Memo-Token') || ''
+  const cookies = parseCookies(context.request.headers.get('Cookie') || '')
+  const actualToken = cookies[AUTH_COOKIE_NAME] || ''
+  const expectedToken = await createAuthToken(context)
 
-  if (actualPassword !== expectedPassword) {
-    return json({ success: false, message: '密码不正确。' }, 401)
+  if (!timingSafeEqual(actualToken, expectedToken)) {
+    return json({ success: false, message: '未登录或登录已过期。' }, 401)
   }
 
   return null
+}
+
+async function createAuthToken(context) {
+  const request = context.request
+  const userAgent = request.headers.get('User-Agent') || ''
+  const password = getMemoPassword(context)
+  const secret = getAuthSecret(context)
+  return sha256(`${userAgent}\n${password}\n${secret}`)
+}
+
+async function sha256(input) {
+  const encoder = new TextEncoder()
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(input))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function parseCookies(cookieHeader) {
+  const result = {}
+  for (const part of cookieHeader.split(';')) {
+    const index = part.indexOf('=')
+    if (index === -1) continue
+    const key = part.slice(0, index).trim()
+    const value = part.slice(index + 1).trim()
+    if (key) result[key] = decodeURIComponent(value)
+  }
+  return result
+}
+
+function timingSafeEqual(a, b) {
+  const left = String(a || '')
+  const right = String(b || '')
+  if (left.length !== right.length) return false
+
+  let diff = 0
+  for (let i = 0; i < left.length; i += 1) {
+    diff |= left.charCodeAt(i) ^ right.charCodeAt(i)
+  }
+  return diff === 0
 }
 
 function normalizePayload(data) {
@@ -153,7 +201,7 @@ function corsHeaders(extra = {}) {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Memo-Password, X-Memo-Token',
+    'Access-Control-Allow-Headers': 'Content-Type',
     ...extra
   }
 }

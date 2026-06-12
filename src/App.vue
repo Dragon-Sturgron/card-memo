@@ -4,10 +4,9 @@ import MemoCard from './components/MemoCard.vue'
 import MemoEditor from './components/MemoEditor.vue'
 import Toolbar from './components/Toolbar.vue'
 import EmptyState from './components/EmptyState.vue'
-import PasswordGate from './components/PasswordGate.vue'
 import CategorySettings from './components/CategorySettings.vue'
 import { deleteMemo, getAllMemos, replaceMemos, saveMemo } from './db'
-import { fetchCloudData, loadCloudPassword, pushCloudData, saveCloudPassword } from './cloudApi'
+import { checkSession, fetchCloudData, logout, pushCloudData, redirectToLogin } from './cloudApi'
 import { createMemoDraft, loadCategories, normalizeCategories, saveCategories } from './utils'
 
 const memos = ref([])
@@ -19,10 +18,8 @@ const editorOpen = ref(false)
 const currentPage = ref('home')
 const editingMemo = ref(null)
 const statusMessage = ref('')
-const cloudPassword = ref('')
+const authChecking = ref(true)
 const appUnlocked = ref(false)
-const passwordLoading = ref(false)
-const passwordError = ref('')
 const cloudLoading = ref(false)
 const cloudStatus = ref('')
 const cloudPending = ref(false)
@@ -36,11 +33,7 @@ let cloudSaveSequence = 0
 onMounted(async () => {
   syncPageFromHash()
   window.addEventListener('hashchange', syncPageFromHash)
-
-  const savedPassword = loadCloudPassword()
-  if (savedPassword) {
-    await handlePasswordSubmit(savedPassword, { silent: true })
-  }
+  await bootApp()
 })
 
 onBeforeUnmount(() => {
@@ -48,29 +41,26 @@ onBeforeUnmount(() => {
   window.removeEventListener('hashchange', syncPageFromHash)
 })
 
-async function handlePasswordSubmit(password, options = {}) {
-  const value = String(password || '').trim()
-  if (!value) return
-
-  passwordLoading.value = true
-  passwordError.value = ''
+async function bootApp() {
+  authChecking.value = true
 
   try {
-    const cloudResult = await fetchCloudData(value)
-    saveCloudPassword(value)
-    cloudPassword.value = value
+    await checkSession()
     appUnlocked.value = true
-
     await loadMemos()
-    await initializeFromCloud(cloudResult)
+    await initializeFromCloud()
   } catch (error) {
     console.error(error)
-    saveCloudPassword('')
-    cloudPassword.value = ''
-    appUnlocked.value = false
-    passwordError.value = options.silent ? '' : error.message
+    if (error.status === 401) {
+      redirectToLogin()
+      return
+    }
+
+    appUnlocked.value = true
+    await loadMemos()
+    flash(`云端连接异常：${error.message}。已进入本地模式。`)
   } finally {
-    passwordLoading.value = false
+    authChecking.value = false
   }
 }
 
@@ -147,6 +137,10 @@ function openEditMemo(memo) {
   editorOpen.value = true
 }
 
+function handleLogout() {
+  logout()
+}
+
 async function handleSave(memo) {
   const now = new Date().toISOString()
   const normalized = normalizeMemo({
@@ -191,7 +185,7 @@ async function handleCategoriesSave(payload) {
   const fallbackCategory = nextCategories[0] || ''
   const renameMap = payload.renameMap || {}
   const removed = new Set(payload.removed || [])
-  let changedMemos = memos.value.map((memo) => {
+  const changedMemos = memos.value.map((memo) => {
     let nextCategory = memo.category || ''
     if (renameMap[nextCategory]) nextCategory = renameMap[nextCategory]
     if (removed.has(nextCategory)) nextCategory = fallbackCategory
@@ -214,7 +208,7 @@ async function initializeFromCloud(preloadedResult = null) {
   cloudStatus.value = '正在检查云端数据...'
 
   try {
-    const result = preloadedResult || (await fetchCloudData(cloudPassword.value.trim()))
+    const result = preloadedResult || (await fetchCloudData())
     const cloudCategories = normalizeCategories(result?.data?.categories || [])
 
     if (cloudCategories.length) {
@@ -237,7 +231,12 @@ async function initializeFromCloud(preloadedResult = null) {
     }
   } catch (error) {
     console.error(error)
+    if (error.status === 401) {
+      redirectToLogin()
+      return
+    }
     cloudStatus.value = `自动保存未连接：${error.message}`
+    flash(`云端同步异常：${error.message}`)
   } finally {
     cloudLoading.value = false
   }
@@ -259,7 +258,7 @@ async function applyCloudData(cloudMemos, cloudCategories = []) {
 }
 
 function scheduleCloudSave(message = '本地已保存，等待自动保存到 KV...') {
-  if (isApplyingCloudData || !appUnlocked.value || !cloudPassword.value.trim()) return
+  if (isApplyingCloudData || !appUnlocked.value) return
 
   cloudPending.value = true
   cloudStatus.value = message
@@ -289,7 +288,7 @@ async function saveToCloudNow(options = {}) {
   cloudStatus.value = automatic ? '正在自动保存到 KV...' : '正在保存到 KV...'
 
   try {
-    const result = await pushCloudData(snapshot, cloudPassword.value.trim())
+    const result = await pushCloudData(snapshot)
     if (currentSequence !== cloudSaveSequence) return
 
     lastCloudSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -297,6 +296,10 @@ async function saveToCloudNow(options = {}) {
     flash('已保存到云端')
   } catch (error) {
     console.error(error)
+    if (error.status === 401) {
+      redirectToLogin()
+      return
+    }
     if (currentSequence === cloudSaveSequence) {
       cloudStatus.value = `自动保存失败：${error.message}。本地数据已保留。`
       flash('自动保存失败，本地数据已保留')
@@ -339,14 +342,14 @@ function flash(message) {
 </script>
 
 <template>
-  <PasswordGate
-    v-if="!appUnlocked"
-    :loading="passwordLoading"
-    :error="passwordError"
-    @submit="handlePasswordSubmit"
-  />
+  <main v-if="authChecking" class="password-page">
+    <section class="password-card">
+      <p class="eyebrow">Card Memo</p>
+      <h1>正在验证登录状态...</h1>
+    </section>
+  </main>
 
-  <main v-else class="app-shell">
+  <main v-else-if="appUnlocked" class="app-shell">
     <CategorySettings
       v-if="currentPage === 'settings'"
       :categories="categories"
@@ -378,6 +381,7 @@ function flash(message) {
         @update:view-mode="viewMode = $event"
         @add="openNewMemo"
         @settings="openSettingsPage"
+        @logout="handleLogout"
       />
 
       <p v-if="statusMessage" class="toast">{{ statusMessage }}</p>

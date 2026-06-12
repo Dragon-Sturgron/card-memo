@@ -1,14 +1,5 @@
-const API_URL = '/api/memos'
-const CLOUD_PASSWORD_KEY = 'card-memo-cloud-password'
-
-function buildHeaders(password) {
-  const headers = {
-    Accept: 'application/json'
-  }
-
-  if (password) headers['X-Memo-Password'] = password
-  return headers
-}
+const MEMOS_API_URL = '/api/memos'
+const AUTH_API_URL = '/api/auth'
 
 async function parseResponse(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -16,43 +7,54 @@ async function parseResponse(response) {
 
   if (!response.ok) {
     const message = typeof data === 'object' && data?.message ? data.message : `请求失败：${response.status}`
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = response.status
+    error.data = data
+    throw error
   }
 
   return data
 }
 
-export function loadCloudPassword() {
-  return sessionStorage.getItem(CLOUD_PASSWORD_KEY) || ''
+export function redirectToLogin() {
+  const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}` || '/'
+  window.location.replace(`/login?redirect=${encodeURIComponent(redirect)}`)
 }
 
-export function saveCloudPassword(password) {
-  const value = String(password || '').trim()
-  if (value) {
-    sessionStorage.setItem(CLOUD_PASSWORD_KEY, value)
-  } else {
-    sessionStorage.removeItem(CLOUD_PASSWORD_KEY)
-  }
+export function logout() {
+  window.location.href = '/logout'
 }
 
-export function clearCloudPassword() {
-  sessionStorage.removeItem(CLOUD_PASSWORD_KEY)
-}
-
-export async function fetchCloudData(password) {
-  const response = await fetch(API_URL, {
+export async function checkSession() {
+  const response = await fetch(AUTH_API_URL, {
     method: 'GET',
-    headers: buildHeaders(password)
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json'
+    }
   })
 
   return parseResponse(response)
 }
 
-export async function pushCloudData({ memos, categories }, password) {
-  const response = await fetch(API_URL, {
-    method: 'PUT',
+export async function fetchCloudData() {
+  const response = await fetch(MEMOS_API_URL, {
+    method: 'GET',
+    credentials: 'same-origin',
     headers: {
-      ...buildHeaders(password),
+      Accept: 'application/json'
+    }
+  })
+
+  return parseResponse(response)
+}
+
+export async function pushCloudData({ memos, categories }) {
+  const response = await fetch(MEMOS_API_URL, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ memos, categories })
