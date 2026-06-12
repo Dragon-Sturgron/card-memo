@@ -4,7 +4,6 @@ import MemoCard from './components/MemoCard.vue'
 import MemoEditor from './components/MemoEditor.vue'
 import Toolbar from './components/Toolbar.vue'
 import EmptyState from './components/EmptyState.vue'
-import CloudPanel from './components/CloudPanel.vue'
 import PasswordGate from './components/PasswordGate.vue'
 import { deleteMemo, getAllMemos, replaceMemos, saveMemo } from './db'
 import { fetchCloudMemos, loadCloudPassword, pushCloudMemos, saveCloudPassword } from './cloudApi'
@@ -333,12 +332,6 @@ function flash(message) {
       </div>
     </header>
 
-    <CloudPanel
-      :loading="cloudLoading"
-      :status="cloudStatus"
-      :pending="cloudPending"
-      :last-saved-at="lastCloudSavedAt"
-    />
 
     <Toolbar
       :query="query"

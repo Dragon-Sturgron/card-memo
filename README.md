@@ -47,7 +47,6 @@ card-memo
 ├── public
 ├── src
 │   ├── components
-│   │   ├── CloudPanel.vue        # 云同步状态面板
 │   │   ├── EmptyState.vue
 │   │   ├── MemoCard.vue
 │   │   ├── MemoEditor.vue
@@ -290,3 +289,8 @@ npm run edge:deploy
 5. 大量导入或跨设备切换前建议先导出 JSON 备份。
 6. KV 是最终一致性存储，不适合强一致、多用户并发编辑场景。
 7. 这个版本适合个人备忘录、轻量记录、少量多设备同步。
+
+
+## 本版界面说明
+
+本版已经移除首页的 Cloud Sync / Edge Functions + KV 自动保存说明卡片，页面只保留备忘录核心操作。KV 同步仍在后台自动执行。

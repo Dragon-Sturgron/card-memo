@@ -27,7 +27,6 @@ function handleSubmit() {
     <section class="password-card">
       <p class="eyebrow">Card Memo</p>
       <h1>请输入访问密码</h1>
-      <p class="password-help">密码由你在 EdgeOne Pages 项目环境变量 <code>MEMO_PASSWORD</code> 中配置。</p>
 
       <form class="password-form" @submit.prevent="handleSubmit">
         <input

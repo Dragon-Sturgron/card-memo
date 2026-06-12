@@ -505,121 +505,6 @@ h1 {
   }
 }
 
-.cloud-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 18px;
-  align-items: start;
-  margin-bottom: 18px;
-  padding: 22px;
-  border: 1px solid var(--border);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
-}
-
-.cloud-panel h2 {
-  margin: 4px 0 8px;
-  font-size: 20px;
-}
-
-.cloud-help {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
-.cloud-help code {
-  padding: 2px 6px;
-  border-radius: 8px;
-  background: #fff7ed;
-  color: #9a3412;
-}
-
-.cloud-controls {
-  display: grid;
-  gap: 12px;
-}
-
-.token-field {
-  display: grid;
-  gap: 8px;
-  color: #554b43;
-  font-weight: 800;
-}
-
-.token-field input {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  outline: none;
-  background: #fff;
-  color: #241c15;
-}
-
-.token-field input:focus {
-  border-color: rgba(249, 115, 22, 0.56);
-  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
-}
-
-.cloud-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.cloud-status {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-@media (max-width: 760px) {
-  .cloud-panel {
-    grid-template-columns: 1fr;
-    border-radius: 22px;
-  }
-
-  .cloud-actions .secondary-button,
-  .cloud-actions .primary-button {
-    flex: 1;
-  }
-}
-
-.sync-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.06);
-  color: #475569;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.sync-badge.pending {
-  background: rgba(245, 158, 11, 0.16);
-  color: #92400e;
-}
-
-.sync-badge.loading {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
-}
-
-.cloud-tip {
-  margin: 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .password-page {
   min-height: 100vh;
   display: grid;
@@ -628,36 +513,27 @@ h1 {
 }
 
 .password-card {
-  width: min(460px, 100%);
-  padding: 30px;
+  width: min(420px, 100%);
+  padding: 34px 28px 28px;
   border: 1px solid var(--border);
   border-radius: 32px;
   background: rgba(255, 255, 255, 0.78);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+  text-align: center;
 }
 
 .password-card h1 {
-  margin-bottom: 12px;
-  font-size: clamp(30px, 8vw, 46px);
-}
-
-.password-help {
-  color: #6b5f55;
-  line-height: 1.7;
-}
-
-.password-help code {
-  padding: 2px 6px;
-  border-radius: 8px;
-  background: #fff7ed;
-  color: #9a3412;
+  margin-bottom: 20px;
+  font-size: clamp(24px, 5vw, 32px);
+  letter-spacing: -0.04em;
+  line-height: 1.15;
 }
 
 .password-form {
   display: grid;
   gap: 12px;
-  margin-top: 22px;
+  margin-top: 0;
 }
 
 .password-form input {
