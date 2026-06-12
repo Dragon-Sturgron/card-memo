@@ -1,0 +1,7 @@
+{
+  "name": "card-memo",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": "dist",
+  "nodeVersion": "22.11.0"
+}

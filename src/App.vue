@@ -4,7 +4,9 @@ import MemoCard from './components/MemoCard.vue'
 import MemoEditor from './components/MemoEditor.vue'
 import Toolbar from './components/Toolbar.vue'
 import EmptyState from './components/EmptyState.vue'
+import CloudPanel from './components/CloudPanel.vue'
 import { deleteMemo, getAllMemos, replaceMemos, saveMemo } from './db'
+import { fetchCloudMemos, loadCloudToken, pushCloudMemos, saveCloudToken } from './cloudApi'
 import { createMemoDraft, downloadJson, readJsonFile } from './utils'
 
 const memos = ref([])
@@ -14,8 +16,14 @@ const viewMode = ref('active')
 const editorOpen = ref(false)
 const editingMemo = ref(null)
 const statusMessage = ref('')
+const cloudToken = ref('')
+const cloudLoading = ref(false)
+const cloudStatus = ref('')
 
-onMounted(loadMemos)
+onMounted(async () => {
+  cloudToken.value = loadCloudToken()
+  await loadMemos()
+})
 
 async function loadMemos() {
   const data = await getAllMemos()
@@ -70,17 +78,11 @@ function openEditMemo(memo) {
 
 async function handleSave(memo) {
   const now = new Date().toISOString()
-  const normalized = {
+  const normalized = normalizeMemo({
     ...memo,
-    title: memo.title || '',
-    content: memo.content || '',
-    tags: memo.tags || [],
-    color: memo.color || '#fff7ed',
-    pinned: Boolean(memo.pinned),
-    archived: Boolean(memo.archived),
     createdAt: memo.createdAt || now,
     updatedAt: now
-  }
+  })
 
   await saveMemo(normalized)
   await loadMemos()
@@ -128,16 +130,7 @@ async function handleImport(event) {
     const importedMemos = Array.isArray(data) ? data : data.memos
     if (!Array.isArray(importedMemos)) throw new Error('Invalid backup file')
 
-    const cleaned = importedMemos
-      .filter((item) => item && item.id && (item.title || item.content))
-      .map((item) => ({
-        ...createMemoDraft(),
-        ...item,
-        tags: Array.isArray(item.tags) ? item.tags : [],
-        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
-        createdAt: item.createdAt || new Date().toISOString()
-      }))
-
+    const cleaned = cleanMemoList(importedMemos)
     if (!cleaned.length) throw new Error('No valid memos')
     const ok = window.confirm(`将用导入文件覆盖当前 ${memos.value.length} 张卡片，确定继续吗？`)
     if (!ok) return
@@ -150,6 +143,76 @@ async function handleImport(event) {
   } catch (error) {
     console.error(error)
     window.alert('导入失败，请确认文件是 Card Memo 导出的 JSON。')
+  }
+}
+
+function handleSaveCloudToken() {
+  saveCloudToken(cloudToken.value)
+  cloudStatus.value = cloudToken.value.trim() ? '令牌已保存到当前浏览器。' : '已清空本地令牌。'
+}
+
+async function pullFromCloud() {
+  const ok = window.confirm('从云端拉取会覆盖当前浏览器里的本地卡片。建议先导出 JSON 备份，确定继续吗？')
+  if (!ok) return
+
+  cloudLoading.value = true
+  cloudStatus.value = '正在从云端拉取...'
+
+  try {
+    const result = await fetchCloudMemos(cloudToken.value.trim())
+    const cloudMemos = cleanMemoList(result?.data?.memos || [])
+    await replaceMemos(cloudMemos)
+    await loadMemos()
+    activeTag.value = '全部'
+    viewMode.value = 'active'
+    cloudStatus.value = `已从云端拉取 ${cloudMemos.length} 张卡片。`
+    flash('云端数据已同步到本地')
+  } catch (error) {
+    console.error(error)
+    cloudStatus.value = `拉取失败：${error.message}`
+  } finally {
+    cloudLoading.value = false
+  }
+}
+
+async function pushToCloud() {
+  const ok = window.confirm(`将当前浏览器里的 ${memos.value.length} 张卡片覆盖保存到云端 KV，确定继续吗？`)
+  if (!ok) return
+
+  cloudLoading.value = true
+  cloudStatus.value = '正在推送到云端...'
+
+  try {
+    const result = await pushCloudMemos(memos.value, cloudToken.value.trim())
+    cloudStatus.value = `已推送 ${result?.data?.count ?? memos.value.length} 张卡片到云端。`
+    flash('本地数据已推送到云端')
+  } catch (error) {
+    console.error(error)
+    cloudStatus.value = `推送失败：${error.message}`
+  } finally {
+    cloudLoading.value = false
+  }
+}
+
+function cleanMemoList(input) {
+  return input
+    .filter((item) => item && item.id && (item.title || item.content))
+    .map((item) => normalizeMemo(item))
+}
+
+function normalizeMemo(memo) {
+  const now = new Date().toISOString()
+  return {
+    ...createMemoDraft(),
+    ...memo,
+    title: memo.title || '',
+    content: memo.content || '',
+    tags: Array.isArray(memo.tags) ? memo.tags : [],
+    color: memo.color || '#fff7ed',
+    pinned: Boolean(memo.pinned),
+    archived: Boolean(memo.archived),
+    createdAt: memo.createdAt || now,
+    updatedAt: memo.updatedAt || memo.createdAt || now
   }
 }
 
@@ -174,6 +237,16 @@ function flash(message) {
         <span>当前卡片</span>
       </div>
     </header>
+
+    <CloudPanel
+      v-model:token="cloudToken"
+      :loading="cloudLoading"
+      :status="cloudStatus"
+      :total="memos.length"
+      @save-token="handleSaveCloudToken"
+      @pull="pullFromCloud"
+      @push="pushToCloud"
+    />
 
     <Toolbar
       :query="query"

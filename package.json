@@ -1,13 +1,15 @@
 {
   "name": "card-memo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "A lightweight card-style memo app deployable to EdgeOne Pages or Cloudflare Pages.",
+  "description": "A card-style memo app with Vue, IndexedDB, EdgeOne Edge Functions, and KV sync.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "edge:dev": "edgeone makers dev",
+    "edge:deploy": "edgeone makers deploy -n card-memo"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^5.2.4",

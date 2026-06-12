@@ -504,3 +504,88 @@ h1 {
     flex: 1;
   }
 }
+
+.cloud-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.cloud-panel h2 {
+  margin: 4px 0 8px;
+  font-size: 20px;
+}
+
+.cloud-help {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.cloud-help code {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.cloud-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.token-field {
+  display: grid;
+  gap: 8px;
+  color: #554b43;
+  font-weight: 800;
+}
+
+.token-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  outline: none;
+  background: #fff;
+  color: #241c15;
+}
+
+.token-field input:focus {
+  border-color: rgba(249, 115, 22, 0.56);
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+}
+
+.cloud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cloud-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .cloud-panel {
+    grid-template-columns: 1fr;
+    border-radius: 22px;
+  }
+
+  .cloud-actions .secondary-button,
+  .cloud-actions .primary-button {
+    flex: 1;
+  }
+}
