@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'card_memo_data'
 const MAX_MEMOS = 5000
+const MAX_CATEGORIES = 200
 
 async function handleRequest(context) {
   const request = context.request
@@ -27,36 +28,43 @@ async function handleRequest(context) {
       const data = await kv.get(STORAGE_KEY, { type: 'json' })
       return json({
         success: true,
-        data: data || { memos: [], updatedAt: null }
+        data: normalizePayload(data || { memos: [], categories: [], updatedAt: null })
       })
     }
 
     if (request.method === 'PUT' || request.method === 'POST') {
       const body = await request.json().catch(() => null)
       if (!body || !Array.isArray(body.memos)) {
-        return json({ success: false, message: '请求体必须是 { memos: [] }。' }, 400)
+        return json({ success: false, message: '请求体必须是 { memos: [], categories: [] }。' }, 400)
       }
 
       const memos = normalizeMemos(body.memos)
+      const categories = normalizeCategories(body.categories || [])
+
       if (memos.length > MAX_MEMOS) {
         return json({ success: false, message: `单次最多同步 ${MAX_MEMOS} 张卡片。` }, 400)
       }
 
+      if (categories.length > MAX_CATEGORIES) {
+        return json({ success: false, message: `单次最多同步 ${MAX_CATEGORIES} 个分类。` }, 400)
+      }
+
       const payload = {
         app: 'card-memo',
-        version: 1,
+        version: 2,
         updatedAt: new Date().toISOString(),
+        categories,
         memos
       }
 
-      const text = JSON.stringify(payload)
-      await kv.put(STORAGE_KEY, text)
+      await kv.put(STORAGE_KEY, JSON.stringify(payload))
 
       return json({
         success: true,
         data: {
           updatedAt: payload.updatedAt,
-          count: memos.length
+          count: memos.length,
+          categoryCount: categories.length
         }
       })
     }
@@ -104,6 +112,27 @@ function checkAuth(context) {
   return null
 }
 
+function normalizePayload(data) {
+  return {
+    app: 'card-memo',
+    version: Number(data?.version || 1),
+    updatedAt: data?.updatedAt || null,
+    categories: normalizeCategories(data?.categories || []),
+    memos: normalizeMemos(data?.memos || [])
+  }
+}
+
+function normalizeCategories(input) {
+  return [
+    ...new Set(
+      (Array.isArray(input) ? input : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .slice(0, MAX_CATEGORIES)
+    )
+  ]
+}
+
 function normalizeMemos(input) {
   return input
     .filter((item) => item && typeof item === 'object' && item.id && (item.title || item.content))
@@ -111,7 +140,7 @@ function normalizeMemos(input) {
       id: String(item.id),
       title: String(item.title || ''),
       content: String(item.content || ''),
-      tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag)).filter(Boolean) : [],
+      category: String(item.category || (Array.isArray(item.tags) ? item.tags[0] || '' : '')),
       color: String(item.color || '#fff7ed'),
       pinned: Boolean(item.pinned),
       archived: Boolean(item.archived),

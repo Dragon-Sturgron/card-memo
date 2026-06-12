@@ -1,155 +1,53 @@
-# EdgeOne Edge Functions + KV 部署说明
+# EdgeOne KV 部署说明
 
-## 1. 路由说明
+本项目是 Card Memo 的 EdgeOne Edge Functions + KV 自动同步版本。
 
-项目中的函数文件：
+## 需要配置的内容
 
-```text
-edge-functions/api/memos.js
-```
+### 1. KV 绑定
 
-部署后访问路由是：
-
-```text
-/api/memos
-```
-
-前端 `src/cloudApi.js` 会直接请求这个地址。
-
-## 2. 必须绑定 KV
-
-函数默认读取变量名：
+变量名必须是：
 
 ```text
 MEMO_KV
 ```
 
-请在 EdgeOne Makers / Pages 项目的 KV Storage 中绑定 namespace，并把变量名设置为 `MEMO_KV`。
+### 2. 访问密码
 
-## 3. 必须配置访问密码
-
-为了避免公开站点被别人读写数据，请配置环境变量：
+环境变量必须配置：
 
 ```text
 MEMO_PASSWORD=你自己设置的访问密码
 ```
 
-打开网页时会先提示输入密码。密码验证通过后，才会进入备忘录页面。
-
-前端请求接口时会携带请求头：
+## 覆盖部署步骤
 
 ```text
-X-Memo-Password: 你的密码
+1. 进入 EdgeOne 项目
+2. 打开“构建部署 / Deployments”
+3. 点击“新建部署”
+4. 上传新版 ZIP
+5. 选择“生产环境”
+6. 开始部署
+7. 确认 KV 绑定 MEMO_KV
+8. 确认环境变量 MEMO_PASSWORD
+9. 如修改过环境变量，重新部署一次
 ```
 
-Edge Function 会用 `MEMO_PASSWORD` 校验。未配置 `MEMO_PASSWORD` 时，接口会返回错误。
-
-兼容旧版本：如果你之前已经配置了 `MEMO_TOKEN`，函数也会兼容读取，但推荐改成 `MEMO_PASSWORD`。
-
-## 4. 本地联调
-
-```bash
-npm install -g edgeone
-edgeone login
-edgeone makers link
-edgeone makers dev
-```
-
-打开：
+## 使用方式
 
 ```text
-http://localhost:8088/
-```
-
-## 5. 部署
-
-如果你使用上传 ZIP 的方式：
-
-```text
-EdgeOne 项目
+打开网站
 ↓
-构建部署 / Deployments
+输入访问密码
 ↓
-新建部署
+进入备忘录
 ↓
-上传新版 ZIP
+新增 / 编辑 / 删除 / 置顶 / 归档卡片
 ↓
-选择生产环境
-↓
-开始部署
+系统自动保存到 KV
 ```
 
-如果你使用 CLI：
+分类通过页面右上方的“设置”按钮维护。新增或修改卡片时，分类通过下拉框选择。分类设置保存后也会自动同步到 KV。
 
-```bash
-edgeone makers deploy -n card-memo
-```
-
-或者推送到 Git 仓库，让 EdgeOne 自动部署。
-
-## 6. 测试接口
-
-读取数据：
-
-```bash
-curl https://你的域名/api/memos \
-  -H "X-Memo-Password: 你的密码"
-```
-
-推送数据：
-
-```bash
-curl -X PUT https://你的域名/api/memos \
-  -H "Content-Type: application/json" \
-  -H "X-Memo-Password: 你的密码" \
-  -d '{"memos":[]}'
-```
-
-如果密码错误，会返回：
-
-```json
-{
-  "success": false,
-  "message": "密码不正确。"
-}
-```
-
-## 7. 自动保存说明
-
-这个版本不需要手动点击“推送到云端”，页面也不保留以下内容：
-
-```text
-访问令牌输入框
-保存令牌按钮
-从 KV 拉取
-立即保存到 KV
-```
-
-以下操作会自动保存到 KV：
-
-```text
-新增卡片
-编辑卡片
-删除卡片
-置顶 / 取消置顶
-归档 / 恢复
-导入 JSON
-```
-
-前端会先把数据写入浏览器 IndexedDB，然后等待约 1.2 秒再调用：
-
-```text
-PUT /api/memos
-```
-
-这样可以避免你连续编辑时频繁请求 KV。
-
-```text
-本地没有卡片 + 云端有卡片：输入密码进入后自动从 KV 恢复
-本地有卡片 + 发生新增/编辑/删除等操作：自动保存到 KV
-```
-
-
-## 本版界面说明
-
-本版已经移除首页的 Cloud Sync / Edge Functions + KV 自动保存说明卡片，页面只保留备忘录核心操作。KV 同步仍在后台自动执行。
+当前版本没有“导出 JSON / 导入 JSON”按钮，也没有“从 KV 拉取 / 立即保存到 KV”按钮。

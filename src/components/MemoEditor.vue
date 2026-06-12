@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, watch } from 'vue'
-import { CARD_COLORS, normalizeTags } from '../utils'
+import { CARD_COLORS } from '../utils'
 
 const props = defineProps({
   open: {
@@ -10,6 +10,10 @@ const props = defineProps({
   memo: {
     type: Object,
     default: null
+  },
+  categories: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -18,13 +22,17 @@ const emit = defineEmits(['close', 'save'])
 const form = reactive({
   title: '',
   content: '',
-  tagsText: '',
+  category: '',
   color: CARD_COLORS[0],
   pinned: false
 })
 
 const isEditing = computed(() => Boolean(props.memo?.id))
 const canSave = computed(() => form.title.trim() || form.content.trim())
+const categoryChoices = computed(() => {
+  const current = form.category ? [form.category] : []
+  return [...new Set([...props.categories, ...current].map((item) => String(item || '').trim()).filter(Boolean))]
+})
 
 watch(
   () => [props.open, props.memo],
@@ -32,7 +40,7 @@ watch(
     if (!props.open || !props.memo) return
     form.title = props.memo.title || ''
     form.content = props.memo.content || ''
-    form.tagsText = (props.memo.tags || []).join(' ')
+    form.category = props.memo.category || props.memo.tags?.[0] || ''
     form.color = props.memo.color || CARD_COLORS[0]
     form.pinned = Boolean(props.memo.pinned)
   },
@@ -46,7 +54,7 @@ function submit() {
     ...props.memo,
     title: form.title.trim(),
     content: form.content.trim(),
-    tags: normalizeTags(form.tagsText),
+    category: form.category,
     color: form.color,
     pinned: form.pinned,
     updatedAt: new Date().toISOString()
@@ -83,8 +91,13 @@ function submit() {
         </label>
 
         <label class="field-label">
-          标签，用空格、逗号或 # 分隔
-          <input v-model="form.tagsText" class="field-input" placeholder="工作 客户 开发" />
+          分类
+          <select v-model="form.category" class="field-input field-select">
+            <option value="">未分类</option>
+            <option v-for="category in categoryChoices" :key="category" :value="category">
+              {{ category }}
+            </option>
+          </select>
         </label>
 
         <div class="editor-options">

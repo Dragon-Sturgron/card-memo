@@ -33,8 +33,8 @@ const shortContent = computed(() => {
 
     <p class="card-content">{{ shortContent || '点击编辑这张卡片。' }}</p>
 
-    <div v-if="memo.tags?.length" class="tag-row">
-      <span v-for="tag in memo.tags" :key="tag" class="tag">#{{ tag }}</span>
+    <div v-if="memo.category" class="tag-row">
+      <span class="tag">{{ memo.category }}</span>
     </div>
 
     <div class="card-footer">

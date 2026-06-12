@@ -8,13 +8,17 @@ export const CARD_COLORS = [
   '#f5f5f4'
 ]
 
+export const DEFAULT_CATEGORIES = ['工作', '生活', '开发', '客户', '待办']
+
+const CATEGORY_STORAGE_KEY = 'card-memo-categories'
+
 export function createMemoDraft() {
   const now = new Date().toISOString()
   return {
     id: crypto.randomUUID(),
     title: '',
     content: '',
-    tags: [],
+    category: '',
     color: CARD_COLORS[0],
     pinned: false,
     archived: false,
@@ -23,17 +27,33 @@ export function createMemoDraft() {
   }
 }
 
-export function normalizeTags(input) {
-  if (Array.isArray(input)) return [...new Set(input.map((tag) => String(tag).trim()).filter(Boolean))]
-
+export function normalizeCategories(input) {
+  const list = Array.isArray(input) ? input : []
   return [
     ...new Set(
-      String(input || '')
-        .split(/[，,\s#]+/)
-        .map((tag) => tag.trim())
+      list
+        .map((item) => String(item || '').trim())
         .filter(Boolean)
     )
   ]
+}
+
+export function loadCategories() {
+  try {
+    const raw = localStorage.getItem(CATEGORY_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    const saved = normalizeCategories(parsed)
+    return saved.length ? saved : [...DEFAULT_CATEGORIES]
+  } catch (error) {
+    console.warn('读取分类失败，使用默认分类。', error)
+    return [...DEFAULT_CATEGORIES]
+  }
+}
+
+export function saveCategories(categories) {
+  const normalized = normalizeCategories(categories)
+  localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(normalized))
+  return normalized
 }
 
 export function formatDate(dateString) {
@@ -44,31 +64,4 @@ export function formatDate(dateString) {
     hour: '2-digit',
     minute: '2-digit'
   }).format(new Date(dateString))
-}
-
-export function downloadJson(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
-
-export function readJsonFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        resolve(JSON.parse(reader.result))
-      } catch (error) {
-        reject(error)
-      }
-    }
-    reader.onerror = () => reject(reader.error)
-    reader.readAsText(file)
-  })
 }

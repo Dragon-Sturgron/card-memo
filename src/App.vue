@@ -5,15 +5,18 @@ import MemoEditor from './components/MemoEditor.vue'
 import Toolbar from './components/Toolbar.vue'
 import EmptyState from './components/EmptyState.vue'
 import PasswordGate from './components/PasswordGate.vue'
+import CategorySettings from './components/CategorySettings.vue'
 import { deleteMemo, getAllMemos, replaceMemos, saveMemo } from './db'
-import { fetchCloudMemos, loadCloudPassword, pushCloudMemos, saveCloudPassword } from './cloudApi'
-import { createMemoDraft, downloadJson, readJsonFile } from './utils'
+import { fetchCloudData, loadCloudPassword, pushCloudData, saveCloudPassword } from './cloudApi'
+import { createMemoDraft, loadCategories, normalizeCategories, saveCategories } from './utils'
 
 const memos = ref([])
+const categories = ref(loadCategories())
 const query = ref('')
-const activeTag = ref('全部')
+const activeCategory = ref('全部')
 const viewMode = ref('active')
 const editorOpen = ref(false)
+const settingsOpen = ref(false)
 const editingMemo = ref(null)
 const statusMessage = ref('')
 const cloudPassword = ref('')
@@ -49,7 +52,7 @@ async function handlePasswordSubmit(password, options = {}) {
   passwordError.value = ''
 
   try {
-    const cloudResult = await fetchCloudMemos(value)
+    const cloudResult = await fetchCloudData(value)
     saveCloudPassword(value)
     cloudPassword.value = value
     appUnlocked.value = true
@@ -69,7 +72,7 @@ async function handlePasswordSubmit(password, options = {}) {
 
 async function loadMemos() {
   const data = await getAllMemos()
-  memos.value = sortMemos(data)
+  memos.value = sortMemos(cleanMemoList(data))
 }
 
 function sortMemos(list) {
@@ -83,29 +86,33 @@ const visibleMemos = computed(() => {
   const keyword = query.value.trim().toLowerCase()
 
   return memos.value.filter((memo) => {
+    const category = memo.category || '未分类'
     const matchMode = viewMode.value === 'archived' ? memo.archived : !memo.archived
-    const matchTag = activeTag.value === '全部' || memo.tags?.includes(activeTag.value)
-    const haystack = [memo.title, memo.content, ...(memo.tags || [])].join(' ').toLowerCase()
+    const matchCategory = activeCategory.value === '全部' || category === activeCategory.value
+    const haystack = [memo.title, memo.content, category].join(' ').toLowerCase()
     const matchKeyword = !keyword || haystack.includes(keyword)
-    return matchMode && matchTag && matchKeyword
+    return matchMode && matchCategory && matchKeyword
   })
 })
 
 const activeMemos = computed(() => memos.value.filter((memo) => !memo.archived))
 
-const tagOptions = computed(() => {
+const categoryOptions = computed(() => {
   const counter = new Map()
   for (const memo of memos.value) {
     if (viewMode.value === 'active' && memo.archived) continue
     if (viewMode.value === 'archived' && !memo.archived) continue
-    for (const tag of memo.tags || []) {
-      counter.set(tag, (counter.get(tag) || 0) + 1)
-    }
+    const category = memo.category || '未分类'
+    counter.set(category, (counter.get(category) || 0) + 1)
   }
 
-  return [...counter.entries()]
+  const defined = categories.value.map((name) => ({ name, count: counter.get(name) || 0 }))
+  const extra = [...counter.entries()]
+    .filter(([name]) => name === '未分类' || !categories.value.includes(name))
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+
+  return [...defined, ...extra]
 })
 
 function openNewMemo() {
@@ -148,7 +155,7 @@ async function toggleArchive(memo) {
 }
 
 async function removeMemo(memo) {
-  const ok = window.confirm(`确定删除${memo.title ? `「${memo.title}」` : '这张卡片'}吗？删除后只能通过导出的备份恢复。`)
+  const ok = window.confirm(`确定删除${memo.title ? `「${memo.title}」` : '这张卡片'}吗？删除后不可恢复。`)
   if (!ok) return
 
   await deleteMemo(memo.id)
@@ -157,40 +164,25 @@ async function removeMemo(memo) {
   scheduleCloudSave()
 }
 
-function handleExport() {
-  const payload = {
-    app: 'card-memo',
-    exportedAt: new Date().toISOString(),
-    memos: memos.value
-  }
-  downloadJson(`card-memo-backup-${new Date().toISOString().slice(0, 10)}.json`, payload)
-}
+async function handleCategoriesSave(payload) {
+  const nextCategories = saveCategories(payload.categories)
+  const renameMap = payload.renameMap || {}
+  const removed = new Set(payload.removed || [])
+  let changedMemos = memos.value.map((memo) => {
+    let nextCategory = memo.category || ''
+    if (renameMap[nextCategory]) nextCategory = renameMap[nextCategory]
+    if (removed.has(nextCategory)) nextCategory = ''
+    return normalizeMemo({ ...memo, category: nextCategory, updatedAt: new Date().toISOString() })
+  })
 
-async function handleImport(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
+  categories.value = nextCategories
+  activeCategory.value = '全部'
+  settingsOpen.value = false
 
-  try {
-    const data = await readJsonFile(file)
-    const importedMemos = Array.isArray(data) ? data : data.memos
-    if (!Array.isArray(importedMemos)) throw new Error('Invalid backup file')
-
-    const cleaned = cleanMemoList(importedMemos)
-    if (!cleaned.length) throw new Error('No valid memos')
-    const ok = window.confirm(`将用导入文件覆盖当前 ${memos.value.length} 张卡片，确定继续吗？`)
-    if (!ok) return
-
-    await replaceMemos(cleaned)
-    await loadMemos()
-    activeTag.value = '全部'
-    viewMode.value = 'active'
-    flash(`已导入 ${cleaned.length} 张卡片`)
-    scheduleCloudSave()
-  } catch (error) {
-    console.error(error)
-    window.alert('导入失败，请确认文件是 Card Memo 导出的 JSON。')
-  }
+  await replaceMemos(changedMemos)
+  await loadMemos()
+  flash('分类设置已保存')
+  scheduleCloudSave('分类设置已保存，等待自动保存到 KV...')
 }
 
 async function initializeFromCloud(preloadedResult = null) {
@@ -198,22 +190,25 @@ async function initializeFromCloud(preloadedResult = null) {
   cloudStatus.value = '正在检查云端数据...'
 
   try {
-    const result = preloadedResult || (await fetchCloudMemos(cloudPassword.value.trim()))
+    const result = preloadedResult || (await fetchCloudData(cloudPassword.value.trim()))
     const cloudMemos = cleanMemoList(result?.data?.memos || [])
+    const cloudCategories = normalizeCategories(result?.data?.categories || [])
+
+    if (cloudCategories.length) {
+      categories.value = saveCategories(cloudCategories)
+    }
 
     if (cloudMemos.length && memos.value.length === 0) {
-      await applyCloudMemos(cloudMemos)
+      await applyCloudData(cloudMemos, cloudCategories)
       cloudStatus.value = `已自动从 KV 恢复 ${cloudMemos.length} 张卡片。后续修改会自动保存。`
       flash('已从云端恢复卡片')
       return
     }
 
-    if (cloudMemos.length) {
-      cloudStatus.value = `自动保存已开启。云端已有 ${cloudMemos.length} 张卡片；当前浏览器有 ${memos.value.length} 张卡片。`
-    } else if (memos.value.length) {
+    if (!cloudMemos.length && memos.value.length) {
       scheduleCloudSave('云端暂无卡片，等待自动把当前本地卡片保存到 KV...')
     } else {
-      cloudStatus.value = '自动保存已开启。云端暂无卡片，本地修改会自动保存到 KV。'
+      cloudStatus.value = '自动保存已开启。'
     }
   } catch (error) {
     console.error(error)
@@ -223,12 +218,15 @@ async function initializeFromCloud(preloadedResult = null) {
   }
 }
 
-async function applyCloudMemos(cloudMemos) {
+async function applyCloudData(cloudMemos, cloudCategories = []) {
   isApplyingCloudData = true
   try {
+    if (cloudCategories.length) {
+      categories.value = saveCategories(cloudCategories)
+    }
     await replaceMemos(cloudMemos)
     await loadMemos()
-    activeTag.value = '全部'
+    activeCategory.value = '全部'
     viewMode.value = 'active'
   } finally {
     isApplyingCloudData = false
@@ -255,24 +253,28 @@ async function saveToCloudNow(options = {}) {
   }
 
   const currentSequence = ++cloudSaveSequence
-  const snapshot = memos.value.map((memo) => ({ ...memo, tags: [...(memo.tags || [])] }))
+  const snapshot = {
+    memos: memos.value.map((memo) => ({ ...memo })),
+    categories: [...categories.value]
+  }
   const automatic = options.automatic !== false
 
   cloudPending.value = false
   cloudLoading.value = true
-  cloudStatus.value = '正在自动保存到 KV...'
+  cloudStatus.value = automatic ? '正在自动保存到 KV...' : '正在保存到 KV...'
 
   try {
-    const result = await pushCloudMemos(snapshot, cloudPassword.value.trim())
+    const result = await pushCloudData(snapshot, cloudPassword.value.trim())
     if (currentSequence !== cloudSaveSequence) return
 
     lastCloudSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    cloudStatus.value = `已自动保存 ${result?.data?.count ?? snapshot.length} 张卡片到 KV（${lastCloudSavedAt.value}）。`
+    cloudStatus.value = `已自动保存 ${result?.data?.count ?? snapshot.memos.length} 张卡片到 KV（${lastCloudSavedAt.value}）。`
     flash('已保存到云端')
   } catch (error) {
     console.error(error)
     if (currentSequence === cloudSaveSequence) {
       cloudStatus.value = `自动保存失败：${error.message}。本地数据已保留。`
+      flash('自动保存失败，本地数据已保留')
     }
   } finally {
     if (currentSequence === cloudSaveSequence) {
@@ -294,7 +296,7 @@ function normalizeMemo(memo) {
     ...memo,
     title: memo.title || '',
     content: memo.content || '',
-    tags: Array.isArray(memo.tags) ? memo.tags : [],
+    category: memo.category || memo.tags?.[0] || '',
     color: memo.color || '#fff7ed',
     pinned: Boolean(memo.pinned),
     archived: Boolean(memo.archived),
@@ -332,19 +334,17 @@ function flash(message) {
       </div>
     </header>
 
-
     <Toolbar
       :query="query"
-      :active-tag="activeTag"
+      :active-category="activeCategory"
       :view-mode="viewMode"
-      :tags="tagOptions"
+      :categories="categoryOptions"
       :total="visibleMemos.length"
       @update:query="query = $event"
-      @update:active-tag="activeTag = $event"
+      @update:active-category="activeCategory = $event"
       @update:view-mode="viewMode = $event"
       @add="openNewMemo"
-      @export="handleExport"
-      @import="handleImport"
+      @settings="settingsOpen = true"
     />
 
     <p v-if="statusMessage" class="toast">{{ statusMessage }}</p>
@@ -354,7 +354,7 @@ function flash(message) {
     <section v-else-if="!visibleMemos.length" class="empty-state compact">
       <div class="empty-icon">🔍</div>
       <h2>没有匹配的卡片</h2>
-      <p>换一个关键词或标签试试。</p>
+      <p>换一个关键词或分类试试。</p>
     </section>
 
     <section v-else class="memo-grid">
@@ -372,8 +372,16 @@ function flash(message) {
     <MemoEditor
       :open="editorOpen"
       :memo="editingMemo"
+      :categories="categories"
       @close="editorOpen = false"
       @save="handleSave"
+    />
+
+    <CategorySettings
+      :open="settingsOpen"
+      :categories="categories"
+      @close="settingsOpen = false"
+      @save="handleCategoriesSave"
     />
   </main>
 </template>

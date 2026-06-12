@@ -39,7 +39,7 @@ export function clearCloudPassword() {
   sessionStorage.removeItem(CLOUD_PASSWORD_KEY)
 }
 
-export async function fetchCloudMemos(password) {
+export async function fetchCloudData(password) {
   const response = await fetch(API_URL, {
     method: 'GET',
     headers: buildHeaders(password)
@@ -48,14 +48,14 @@ export async function fetchCloudMemos(password) {
   return parseResponse(response)
 }
 
-export async function pushCloudMemos(memos, password) {
+export async function pushCloudData({ memos, categories }, password) {
   const response = await fetch(API_URL, {
     method: 'PUT',
     headers: {
       ...buildHeaders(password),
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ memos })
+    body: JSON.stringify({ memos, categories })
   })
 
   return parseResponse(response)

@@ -4,11 +4,11 @@ defineProps({
     type: String,
     default: ''
   },
-  tags: {
+  categories: {
     type: Array,
     default: () => []
   },
-  activeTag: {
+  activeCategory: {
     type: String,
     default: '全部'
   },
@@ -22,7 +22,13 @@ defineProps({
   }
 })
 
-const emit = defineEmits(['update:query', 'update:active-tag', 'update:view-mode', 'add', 'export', 'import'])
+const emit = defineEmits([
+  'update:query',
+  'update:active-category',
+  'update:view-mode',
+  'add',
+  'settings'
+])
 </script>
 
 <template>
@@ -32,11 +38,15 @@ const emit = defineEmits(['update:query', 'update:active-tag', 'update:view-mode
         <span>🔎</span>
         <input
           :value="query"
-          placeholder="搜索标题、内容、标签..."
+          placeholder="搜索标题、内容、分类..."
           @input="emit('update:query', $event.target.value)"
         />
       </div>
-      <button class="primary-button" @click="emit('add')">+ 新增卡片</button>
+
+      <div class="toolbar-actions">
+        <button class="secondary-button" @click="emit('settings')">⚙ 设置</button>
+        <button class="primary-button" @click="emit('add')">+ 新增卡片</button>
+      </div>
     </div>
 
     <div class="toolbar-row subtle-row">
@@ -56,32 +66,24 @@ const emit = defineEmits(['update:query', 'update:active-tag', 'update:view-mode
           归档
         </button>
       </div>
-
-      <div class="import-export">
-        <button class="secondary-button small" @click="emit('export')">导出 JSON</button>
-        <label class="secondary-button small file-button">
-          导入 JSON
-          <input type="file" accept="application/json" @change="emit('import', $event)" />
-        </label>
-      </div>
     </div>
 
     <div class="tag-filter">
       <button
         class="tag-chip"
-        :class="{ active: activeTag === '全部' }"
-        @click="emit('update:active-tag', '全部')"
+        :class="{ active: activeCategory === '全部' }"
+        @click="emit('update:active-category', '全部')"
       >
         全部 {{ total }}
       </button>
       <button
-        v-for="tag in tags"
-        :key="tag.name"
+        v-for="category in categories"
+        :key="category.name"
         class="tag-chip"
-        :class="{ active: activeTag === tag.name }"
-        @click="emit('update:active-tag', tag.name)"
+        :class="{ active: activeCategory === category.name }"
+        @click="emit('update:active-category', category.name)"
       >
-        #{{ tag.name }} {{ tag.count }}
+        {{ category.name }} {{ category.count }}
       </button>
     </div>
   </section>

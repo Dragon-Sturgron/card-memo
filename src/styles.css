@@ -560,3 +560,61 @@ h1 {
   color: #b91c1c;
   font-weight: 700;
 }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #6b5f55 50%), linear-gradient(135deg, #6b5f55 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 13px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.settings-panel {
+  width: min(620px, 100%);
+}
+
+.settings-help {
+  margin: -6px 0 0;
+  color: #6b5f55;
+  line-height: 1.7;
+}
+
+.category-list-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.category-edit-row,
+.category-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.danger-outline {
+  color: #dc2626;
+}
+
+@media (max-width: 760px) {
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-actions .secondary-button,
+  .toolbar-actions .primary-button {
+    flex: 1;
+  }
+
+  .category-edit-row,
+  .category-add-row {
+    grid-template-columns: 1fr;
+  }
+}
