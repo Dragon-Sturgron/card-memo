@@ -16,7 +16,7 @@ const query = ref('')
 const activeCategory = ref('全部')
 const viewMode = ref('active')
 const editorOpen = ref(false)
-const settingsOpen = ref(false)
+const currentPage = ref('home')
 const editingMemo = ref(null)
 const statusMessage = ref('')
 const cloudPassword = ref('')
@@ -34,6 +34,9 @@ let isApplyingCloudData = false
 let cloudSaveSequence = 0
 
 onMounted(async () => {
+  syncPageFromHash()
+  window.addEventListener('hashchange', syncPageFromHash)
+
   const savedPassword = loadCloudPassword()
   if (savedPassword) {
     await handlePasswordSubmit(savedPassword, { silent: true })
@@ -42,6 +45,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
+  window.removeEventListener('hashchange', syncPageFromHash)
 })
 
 async function handlePasswordSubmit(password, options = {}) {
@@ -86,7 +90,7 @@ const visibleMemos = computed(() => {
   const keyword = query.value.trim().toLowerCase()
 
   return memos.value.filter((memo) => {
-    const category = memo.category || '未分类'
+    const category = memo.category || categories.value[0] || ''
     const matchMode = viewMode.value === 'archived' ? memo.archived : !memo.archived
     const matchCategory = activeCategory.value === '全部' || category === activeCategory.value
     const haystack = [memo.title, memo.content, category].join(' ').toLowerCase()
@@ -102,13 +106,13 @@ const categoryOptions = computed(() => {
   for (const memo of memos.value) {
     if (viewMode.value === 'active' && memo.archived) continue
     if (viewMode.value === 'archived' && !memo.archived) continue
-    const category = memo.category || '未分类'
+    const category = memo.category || categories.value[0] || ''
     counter.set(category, (counter.get(category) || 0) + 1)
   }
 
   const defined = categories.value.map((name) => ({ name, count: counter.get(name) || 0 }))
   const extra = [...counter.entries()]
-    .filter(([name]) => name === '未分类' || !categories.value.includes(name))
+    .filter(([name]) => name && !categories.value.includes(name))
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 
@@ -116,8 +120,26 @@ const categoryOptions = computed(() => {
 })
 
 function openNewMemo() {
-  editingMemo.value = createMemoDraft()
+  const draft = createMemoDraft()
+  draft.category = categories.value[0] || ''
+  editingMemo.value = draft
   editorOpen.value = true
+}
+
+function syncPageFromHash() {
+  currentPage.value = window.location.hash === '#/settings' ? 'settings' : 'home'
+}
+
+function openSettingsPage() {
+  currentPage.value = 'settings'
+  window.location.hash = '#/settings'
+}
+
+function backToHome() {
+  currentPage.value = 'home'
+  if (window.location.hash === '#/settings') {
+    window.location.hash = '#/'
+  }
 }
 
 function openEditMemo(memo) {
@@ -166,18 +188,20 @@ async function removeMemo(memo) {
 
 async function handleCategoriesSave(payload) {
   const nextCategories = saveCategories(payload.categories)
+  const fallbackCategory = nextCategories[0] || ''
   const renameMap = payload.renameMap || {}
   const removed = new Set(payload.removed || [])
   let changedMemos = memos.value.map((memo) => {
     let nextCategory = memo.category || ''
     if (renameMap[nextCategory]) nextCategory = renameMap[nextCategory]
-    if (removed.has(nextCategory)) nextCategory = ''
+    if (removed.has(nextCategory)) nextCategory = fallbackCategory
+    if (!nextCategory) nextCategory = fallbackCategory
     return normalizeMemo({ ...memo, category: nextCategory, updatedAt: new Date().toISOString() })
   })
 
   categories.value = nextCategories
   activeCategory.value = '全部'
-  settingsOpen.value = false
+  backToHome()
 
   await replaceMemos(changedMemos)
   await loadMemos()
@@ -191,12 +215,13 @@ async function initializeFromCloud(preloadedResult = null) {
 
   try {
     const result = preloadedResult || (await fetchCloudData(cloudPassword.value.trim()))
-    const cloudMemos = cleanMemoList(result?.data?.memos || [])
     const cloudCategories = normalizeCategories(result?.data?.categories || [])
 
     if (cloudCategories.length) {
       categories.value = saveCategories(cloudCategories)
     }
+
+    const cloudMemos = cleanMemoList(result?.data?.memos || [])
 
     if (cloudMemos.length && memos.value.length === 0) {
       await applyCloudData(cloudMemos, cloudCategories)
@@ -296,7 +321,7 @@ function normalizeMemo(memo) {
     ...memo,
     title: memo.title || '',
     content: memo.content || '',
-    category: memo.category || memo.tags?.[0] || '',
+    category: memo.category || memo.tags?.[0] || categories.value[0] || '',
     color: memo.color || '#fff7ed',
     pinned: Boolean(memo.pinned),
     archived: Boolean(memo.archived),
@@ -322,66 +347,68 @@ function flash(message) {
   />
 
   <main v-else class="app-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">Card Memo</p>
-        <h1>卡片式备忘录</h1>
-        <p class="hero-text">新增一张卡片，记录客户沟通、开发思路、临时待办或任何你想留下的内容。</p>
-      </div>
-      <div class="stats-card">
-        <strong>{{ activeMemos.length }}</strong>
-        <span>当前卡片</span>
-      </div>
-    </header>
-
-    <Toolbar
-      :query="query"
-      :active-category="activeCategory"
-      :view-mode="viewMode"
-      :categories="categoryOptions"
-      :total="visibleMemos.length"
-      @update:query="query = $event"
-      @update:active-category="activeCategory = $event"
-      @update:view-mode="viewMode = $event"
-      @add="openNewMemo"
-      @settings="settingsOpen = true"
-    />
-
-    <p v-if="statusMessage" class="toast">{{ statusMessage }}</p>
-
-    <EmptyState v-if="!memos.length" @add="openNewMemo" />
-
-    <section v-else-if="!visibleMemos.length" class="empty-state compact">
-      <div class="empty-icon">🔍</div>
-      <h2>没有匹配的卡片</h2>
-      <p>换一个关键词或分类试试。</p>
-    </section>
-
-    <section v-else class="memo-grid">
-      <MemoCard
-        v-for="memo in visibleMemos"
-        :key="memo.id"
-        :memo="memo"
-        @edit="openEditMemo"
-        @toggle-pin="togglePin"
-        @toggle-archive="toggleArchive"
-        @remove="removeMemo"
-      />
-    </section>
-
-    <MemoEditor
-      :open="editorOpen"
-      :memo="editingMemo"
-      :categories="categories"
-      @close="editorOpen = false"
-      @save="handleSave"
-    />
-
     <CategorySettings
-      :open="settingsOpen"
+      v-if="currentPage === 'settings'"
       :categories="categories"
-      @close="settingsOpen = false"
+      @back="backToHome"
       @save="handleCategoriesSave"
     />
+
+    <template v-else>
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Card Memo</p>
+          <h1>卡片式备忘录</h1>
+          <p class="hero-text">新增一张卡片，记录客户沟通、开发思路、临时待办或任何你想留下的内容。</p>
+        </div>
+        <div class="stats-card">
+          <strong>{{ activeMemos.length }}</strong>
+          <span>当前卡片</span>
+        </div>
+      </header>
+
+      <Toolbar
+        :query="query"
+        :active-category="activeCategory"
+        :view-mode="viewMode"
+        :categories="categoryOptions"
+        :total="visibleMemos.length"
+        @update:query="query = $event"
+        @update:active-category="activeCategory = $event"
+        @update:view-mode="viewMode = $event"
+        @add="openNewMemo"
+        @settings="openSettingsPage"
+      />
+
+      <p v-if="statusMessage" class="toast">{{ statusMessage }}</p>
+
+      <EmptyState v-if="!memos.length" @add="openNewMemo" />
+
+      <section v-else-if="!visibleMemos.length" class="empty-state compact">
+        <div class="empty-icon">🔍</div>
+        <h2>没有匹配的卡片</h2>
+        <p>换一个关键词或分类试试。</p>
+      </section>
+
+      <section v-else class="memo-grid">
+        <MemoCard
+          v-for="memo in visibleMemos"
+          :key="memo.id"
+          :memo="memo"
+          @edit="openEditMemo"
+          @toggle-pin="togglePin"
+          @toggle-archive="toggleArchive"
+          @remove="removeMemo"
+        />
+      </section>
+
+      <MemoEditor
+        :open="editorOpen"
+        :memo="editingMemo"
+        :categories="categories"
+        @close="editorOpen = false"
+        @save="handleSave"
+      />
+    </template>
   </main>
 </template>

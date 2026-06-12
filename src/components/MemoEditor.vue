@@ -29,18 +29,17 @@ const form = reactive({
 
 const isEditing = computed(() => Boolean(props.memo?.id))
 const canSave = computed(() => form.title.trim() || form.content.trim())
-const categoryChoices = computed(() => {
-  const current = form.category ? [form.category] : []
-  return [...new Set([...props.categories, ...current].map((item) => String(item || '').trim()).filter(Boolean))]
-})
+const firstCategory = computed(() => props.categories[0] || '')
+const categoryChoices = computed(() => props.categories.map((item) => String(item || '').trim()).filter(Boolean))
 
 watch(
-  () => [props.open, props.memo],
+  () => [props.open, props.memo, props.categories],
   () => {
     if (!props.open || !props.memo) return
     form.title = props.memo.title || ''
     form.content = props.memo.content || ''
-    form.category = props.memo.category || props.memo.tags?.[0] || ''
+    const candidateCategory = props.memo.category || props.memo.tags?.[0] || firstCategory.value
+    form.category = categoryChoices.value.includes(candidateCategory) ? candidateCategory : firstCategory.value
     form.color = props.memo.color || CARD_COLORS[0]
     form.pinned = Boolean(props.memo.pinned)
   },
@@ -54,7 +53,7 @@ function submit() {
     ...props.memo,
     title: form.title.trim(),
     content: form.content.trim(),
-    category: form.category,
+    category: categoryChoices.value.includes(form.category) ? form.category : firstCategory.value,
     color: form.color,
     pinned: form.pinned,
     updatedAt: new Date().toISOString()
@@ -93,7 +92,6 @@ function submit() {
         <label class="field-label">
           分类
           <select v-model="form.category" class="field-input field-select">
-            <option value="">未分类</option>
             <option v-for="category in categoryChoices" :key="category" :value="category">
               {{ category }}
             </option>
