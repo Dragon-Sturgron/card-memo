@@ -589,3 +589,98 @@ h1 {
     flex: 1;
   }
 }
+
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sync-badge.pending {
+  background: rgba(245, 158, 11, 0.16);
+  color: #92400e;
+}
+
+.sync-badge.loading {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.cloud-tip {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.password-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.password-card {
+  width: min(460px, 100%);
+  padding: 30px;
+  border: 1px solid var(--border);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.password-card h1 {
+  margin-bottom: 12px;
+  font-size: clamp(30px, 8vw, 46px);
+}
+
+.password-help {
+  color: #6b5f55;
+  line-height: 1.7;
+}
+
+.password-help code {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.password-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.password-form input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  outline: none;
+  background: #fff;
+  color: #241c15;
+}
+
+.password-form input:focus {
+  border-color: rgba(249, 115, 22, 0.56);
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+}
+
+.password-error {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+  font-weight: 700;
+}

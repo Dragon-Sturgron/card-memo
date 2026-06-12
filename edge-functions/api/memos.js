@@ -82,14 +82,23 @@ function getEnvValue(context, name) {
 }
 
 function checkAuth(context) {
-  const expectedToken = getEnvValue(context, 'MEMO_TOKEN').trim()
-  if (!expectedToken) return null
+  const expectedPassword = getEnvValue(context, 'MEMO_PASSWORD').trim() || getEnvValue(context, 'MEMO_TOKEN').trim()
+
+  if (!expectedPassword) {
+    return json(
+      {
+        success: false,
+        message: '未配置访问密码。请在 EdgeOne Pages 项目环境变量中设置 MEMO_PASSWORD。'
+      },
+      500
+    )
+  }
 
   const request = context.request
-  const actualToken = request.headers.get('X-Memo-Token') || new URL(request.url).searchParams.get('token') || ''
+  const actualPassword = request.headers.get('X-Memo-Password') || request.headers.get('X-Memo-Token') || ''
 
-  if (actualToken !== expectedToken) {
-    return json({ success: false, message: '访问令牌不正确。' }, 401)
+  if (actualPassword !== expectedPassword) {
+    return json({ success: false, message: '密码不正确。' }, 401)
   }
 
   return null
@@ -115,7 +124,7 @@ function corsHeaders(extra = {}) {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Memo-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Memo-Password, X-Memo-Token',
     ...extra
   }
 }

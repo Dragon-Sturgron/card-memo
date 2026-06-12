@@ -1,12 +1,12 @@
 const API_URL = '/api/memos'
-const CLOUD_TOKEN_KEY = 'card-memo-cloud-token'
+const CLOUD_PASSWORD_KEY = 'card-memo-cloud-password'
 
-function buildHeaders(token) {
+function buildHeaders(password) {
   const headers = {
     Accept: 'application/json'
   }
 
-  if (token) headers['X-Memo-Token'] = token
+  if (password) headers['X-Memo-Password'] = password
   return headers
 }
 
@@ -22,33 +22,37 @@ async function parseResponse(response) {
   return data
 }
 
-export function loadCloudToken() {
-  return localStorage.getItem(CLOUD_TOKEN_KEY) || ''
+export function loadCloudPassword() {
+  return sessionStorage.getItem(CLOUD_PASSWORD_KEY) || ''
 }
 
-export function saveCloudToken(token) {
-  const value = String(token || '').trim()
+export function saveCloudPassword(password) {
+  const value = String(password || '').trim()
   if (value) {
-    localStorage.setItem(CLOUD_TOKEN_KEY, value)
+    sessionStorage.setItem(CLOUD_PASSWORD_KEY, value)
   } else {
-    localStorage.removeItem(CLOUD_TOKEN_KEY)
+    sessionStorage.removeItem(CLOUD_PASSWORD_KEY)
   }
 }
 
-export async function fetchCloudMemos(token) {
+export function clearCloudPassword() {
+  sessionStorage.removeItem(CLOUD_PASSWORD_KEY)
+}
+
+export async function fetchCloudMemos(password) {
   const response = await fetch(API_URL, {
     method: 'GET',
-    headers: buildHeaders(token)
+    headers: buildHeaders(password)
   })
 
   return parseResponse(response)
 }
 
-export async function pushCloudMemos(memos, token) {
+export async function pushCloudMemos(memos, password) {
   const response = await fetch(API_URL, {
     method: 'PUT',
     headers: {
-      ...buildHeaders(token),
+      ...buildHeaders(password),
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ memos })

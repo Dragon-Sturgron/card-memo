@@ -1,12 +1,13 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import MemoCard from './components/MemoCard.vue'
 import MemoEditor from './components/MemoEditor.vue'
 import Toolbar from './components/Toolbar.vue'
 import EmptyState from './components/EmptyState.vue'
 import CloudPanel from './components/CloudPanel.vue'
+import PasswordGate from './components/PasswordGate.vue'
 import { deleteMemo, getAllMemos, replaceMemos, saveMemo } from './db'
-import { fetchCloudMemos, loadCloudToken, pushCloudMemos, saveCloudToken } from './cloudApi'
+import { fetchCloudMemos, loadCloudPassword, pushCloudMemos, saveCloudPassword } from './cloudApi'
 import { createMemoDraft, downloadJson, readJsonFile } from './utils'
 
 const memos = ref([])
@@ -16,14 +17,56 @@ const viewMode = ref('active')
 const editorOpen = ref(false)
 const editingMemo = ref(null)
 const statusMessage = ref('')
-const cloudToken = ref('')
+const cloudPassword = ref('')
+const appUnlocked = ref(false)
+const passwordLoading = ref(false)
+const passwordError = ref('')
 const cloudLoading = ref(false)
 const cloudStatus = ref('')
+const cloudPending = ref(false)
+const lastCloudSavedAt = ref('')
+
+const AUTO_SAVE_DELAY = 1200
+let autoSaveTimer = null
+let isApplyingCloudData = false
+let cloudSaveSequence = 0
 
 onMounted(async () => {
-  cloudToken.value = loadCloudToken()
-  await loadMemos()
+  const savedPassword = loadCloudPassword()
+  if (savedPassword) {
+    await handlePasswordSubmit(savedPassword, { silent: true })
+  }
 })
+
+onBeforeUnmount(() => {
+  if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
+})
+
+async function handlePasswordSubmit(password, options = {}) {
+  const value = String(password || '').trim()
+  if (!value) return
+
+  passwordLoading.value = true
+  passwordError.value = ''
+
+  try {
+    const cloudResult = await fetchCloudMemos(value)
+    saveCloudPassword(value)
+    cloudPassword.value = value
+    appUnlocked.value = true
+
+    await loadMemos()
+    await initializeFromCloud(cloudResult)
+  } catch (error) {
+    console.error(error)
+    saveCloudPassword('')
+    cloudPassword.value = ''
+    appUnlocked.value = false
+    passwordError.value = options.silent ? '' : error.message
+  } finally {
+    passwordLoading.value = false
+  }
+}
 
 async function loadMemos() {
   const data = await getAllMemos()
@@ -89,17 +132,20 @@ async function handleSave(memo) {
   editorOpen.value = false
   editingMemo.value = null
   flash('卡片已保存')
+  scheduleCloudSave()
 }
 
 async function togglePin(memo) {
   await saveMemo({ ...memo, pinned: !memo.pinned, updatedAt: new Date().toISOString() })
   await loadMemos()
+  scheduleCloudSave()
 }
 
 async function toggleArchive(memo) {
   await saveMemo({ ...memo, archived: !memo.archived, updatedAt: new Date().toISOString() })
   await loadMemos()
   flash(memo.archived ? '卡片已恢复' : '卡片已归档')
+  scheduleCloudSave()
 }
 
 async function removeMemo(memo) {
@@ -109,6 +155,7 @@ async function removeMemo(memo) {
   await deleteMemo(memo.id)
   await loadMemos()
   flash('卡片已删除')
+  scheduleCloudSave()
 }
 
 function handleExport() {
@@ -140,57 +187,98 @@ async function handleImport(event) {
     activeTag.value = '全部'
     viewMode.value = 'active'
     flash(`已导入 ${cleaned.length} 张卡片`)
+    scheduleCloudSave()
   } catch (error) {
     console.error(error)
     window.alert('导入失败，请确认文件是 Card Memo 导出的 JSON。')
   }
 }
 
-function handleSaveCloudToken() {
-  saveCloudToken(cloudToken.value)
-  cloudStatus.value = cloudToken.value.trim() ? '令牌已保存到当前浏览器。' : '已清空本地令牌。'
-}
-
-async function pullFromCloud() {
-  const ok = window.confirm('从云端拉取会覆盖当前浏览器里的本地卡片。建议先导出 JSON 备份，确定继续吗？')
-  if (!ok) return
-
+async function initializeFromCloud(preloadedResult = null) {
   cloudLoading.value = true
-  cloudStatus.value = '正在从云端拉取...'
+  cloudStatus.value = '正在检查云端数据...'
 
   try {
-    const result = await fetchCloudMemos(cloudToken.value.trim())
+    const result = preloadedResult || (await fetchCloudMemos(cloudPassword.value.trim()))
     const cloudMemos = cleanMemoList(result?.data?.memos || [])
-    await replaceMemos(cloudMemos)
-    await loadMemos()
-    activeTag.value = '全部'
-    viewMode.value = 'active'
-    cloudStatus.value = `已从云端拉取 ${cloudMemos.length} 张卡片。`
-    flash('云端数据已同步到本地')
+
+    if (cloudMemos.length && memos.value.length === 0) {
+      await applyCloudMemos(cloudMemos)
+      cloudStatus.value = `已自动从 KV 恢复 ${cloudMemos.length} 张卡片。后续修改会自动保存。`
+      flash('已从云端恢复卡片')
+      return
+    }
+
+    if (cloudMemos.length) {
+      cloudStatus.value = `自动保存已开启。云端已有 ${cloudMemos.length} 张卡片；当前浏览器有 ${memos.value.length} 张卡片。`
+    } else if (memos.value.length) {
+      scheduleCloudSave('云端暂无卡片，等待自动把当前本地卡片保存到 KV...')
+    } else {
+      cloudStatus.value = '自动保存已开启。云端暂无卡片，本地修改会自动保存到 KV。'
+    }
   } catch (error) {
     console.error(error)
-    cloudStatus.value = `拉取失败：${error.message}`
+    cloudStatus.value = `自动保存未连接：${error.message}`
   } finally {
     cloudLoading.value = false
   }
 }
 
-async function pushToCloud() {
-  const ok = window.confirm(`将当前浏览器里的 ${memos.value.length} 张卡片覆盖保存到云端 KV，确定继续吗？`)
-  if (!ok) return
+async function applyCloudMemos(cloudMemos) {
+  isApplyingCloudData = true
+  try {
+    await replaceMemos(cloudMemos)
+    await loadMemos()
+    activeTag.value = '全部'
+    viewMode.value = 'active'
+  } finally {
+    isApplyingCloudData = false
+  }
+}
 
+function scheduleCloudSave(message = '本地已保存，等待自动保存到 KV...') {
+  if (isApplyingCloudData || !appUnlocked.value || !cloudPassword.value.trim()) return
+
+  cloudPending.value = true
+  cloudStatus.value = message
+
+  if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = null
+    saveToCloudNow({ automatic: true })
+  }, AUTO_SAVE_DELAY)
+}
+
+async function saveToCloudNow(options = {}) {
+  if (autoSaveTimer) {
+    window.clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+
+  const currentSequence = ++cloudSaveSequence
+  const snapshot = memos.value.map((memo) => ({ ...memo, tags: [...(memo.tags || [])] }))
+  const automatic = options.automatic !== false
+
+  cloudPending.value = false
   cloudLoading.value = true
-  cloudStatus.value = '正在推送到云端...'
+  cloudStatus.value = '正在自动保存到 KV...'
 
   try {
-    const result = await pushCloudMemos(memos.value, cloudToken.value.trim())
-    cloudStatus.value = `已推送 ${result?.data?.count ?? memos.value.length} 张卡片到云端。`
-    flash('本地数据已推送到云端')
+    const result = await pushCloudMemos(snapshot, cloudPassword.value.trim())
+    if (currentSequence !== cloudSaveSequence) return
+
+    lastCloudSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    cloudStatus.value = `已自动保存 ${result?.data?.count ?? snapshot.length} 张卡片到 KV（${lastCloudSavedAt.value}）。`
+    flash('已保存到云端')
   } catch (error) {
     console.error(error)
-    cloudStatus.value = `推送失败：${error.message}`
+    if (currentSequence === cloudSaveSequence) {
+      cloudStatus.value = `自动保存失败：${error.message}。本地数据已保留。`
+    }
   } finally {
-    cloudLoading.value = false
+    if (currentSequence === cloudSaveSequence) {
+      cloudLoading.value = false
+    }
   }
 }
 
@@ -225,7 +313,14 @@ function flash(message) {
 </script>
 
 <template>
-  <main class="app-shell">
+  <PasswordGate
+    v-if="!appUnlocked"
+    :loading="passwordLoading"
+    :error="passwordError"
+    @submit="handlePasswordSubmit"
+  />
+
+  <main v-else class="app-shell">
     <header class="hero">
       <div>
         <p class="eyebrow">Card Memo</p>
@@ -239,13 +334,10 @@ function flash(message) {
     </header>
 
     <CloudPanel
-      v-model:token="cloudToken"
       :loading="cloudLoading"
       :status="cloudStatus"
-      :total="memos.length"
-      @save-token="handleSaveCloudToken"
-      @pull="pullFromCloud"
-      @push="pushToCloud"
+      :pending="cloudPending"
+      :last-saved-at="lastCloudSavedAt"
     />
 
     <Toolbar

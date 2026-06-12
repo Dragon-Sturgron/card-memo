@@ -1,23 +1,29 @@
-# Card Memo 卡片式备忘录
+# Card Memo 卡片式备忘录（密码入口 + 自动保存到 KV 版）
 
 一个卡片式备忘录项目，支持：
 
 - Vue 3 + Vite 前端
+- 进入页面前输入访问密码
 - IndexedDB 本地离线保存
 - EdgeOne Edge Functions API
-- EdgeOne KV 云端同步
+- EdgeOne KV 云端自动同步
 - JSON 导入 / 导出备份
 
-当前版本采用“本地优先 + 手动云同步”：
+当前版本采用“密码入口 + 本地优先 + 自动保存到 KV”：
 
-- 平时新增、编辑、删除卡片时，数据会先保存在浏览器 IndexedDB。
-- 点击“推送到云端”时，会把当前浏览器里的卡片覆盖保存到 EdgeOne KV。
-- 点击“从云端拉取”时，会把 KV 里的卡片覆盖到当前浏览器。
+- 打开页面后，先输入访问密码。
+- 密码不写死在前端，由你在 EdgeOne Pages / Makers 环境变量中配置：`MEMO_PASSWORD`。
+- 密码验证通过后，才进入卡片备忘录页面。
+- 新增、编辑、删除、置顶、归档、导入卡片时，数据会先保存到浏览器 IndexedDB。
+- 本地保存完成后，系统会自动防抖同步到 EdgeOne KV，不需要手动点击推送。
+- 新设备首次输入密码进入时，如果本地没有卡片，会自动从 KV 恢复数据。
+- 页面不保留“访问令牌输入框 / 保存令牌按钮 / 从 KV 拉取 / 立即保存到 KV”这些按钮。
 
-这样设计的好处是：即使 KV 或网络暂时不可用，也不会影响你本地记录。
+这样设计的好处是：即使 KV 或网络暂时不可用，也不会影响你本地记录；网络恢复后再次编辑即可自动保存到 KV。
 
 ## 功能
 
+- 进入页面前输入密码
 - 新增卡片
 - 编辑卡片
 - 删除卡片
@@ -28,9 +34,8 @@
 - 卡片颜色选择
 - JSON 导出备份
 - JSON 导入恢复
-- EdgeOne KV 云端推送
-- EdgeOne KV 云端拉取
-- 可选访问令牌 `MEMO_TOKEN`
+- EdgeOne KV 自动保存
+- EdgeOne KV 自动恢复
 
 ## 项目结构
 
@@ -38,18 +43,19 @@
 card-memo
 ├── edge-functions
 │   └── api
-│       └── memos.js          # EdgeOne Edge Function，路由为 /api/memos
+│       └── memos.js              # EdgeOne Edge Function，路由为 /api/memos
 ├── public
 ├── src
 │   ├── components
-│   │   ├── CloudPanel.vue    # 云同步面板
+│   │   ├── CloudPanel.vue        # 云同步状态面板
 │   │   ├── EmptyState.vue
 │   │   ├── MemoCard.vue
 │   │   ├── MemoEditor.vue
+│   │   ├── PasswordGate.vue      # 进入页面前的密码弹窗
 │   │   └── Toolbar.vue
 │   ├── App.vue
-│   ├── cloudApi.js           # 前端调用 /api/memos
-│   ├── db.js                 # IndexedDB 本地存储
+│   ├── cloudApi.js               # 前端调用 /api/memos
+│   ├── db.js                     # IndexedDB 本地存储
 │   ├── main.js
 │   ├── styles.css
 │   └── utils.js
@@ -68,7 +74,7 @@ npm install
 npm run dev
 ```
 
-注意：`npm run dev` 只启动 Vite，不会启动 Edge Functions。页面可以正常使用本地 IndexedDB，但云同步接口 `/api/memos` 不可用。
+注意：`npm run dev` 只启动 Vite，不会启动 Edge Functions。由于现在接口要求密码和 KV，普通 Vite 开发模式下无法完整联调云同步。
 
 ## EdgeOne 本地联调
 
@@ -103,7 +109,7 @@ MEMO_KV
 
 配置步骤：
 
-1. 进入 EdgeOne Makers 控制台。
+1. 进入 EdgeOne Makers / Pages 控制台。
 2. 打开 Storage / KV。
 3. 创建 KV Namespace，例如：`card_memo`。
 4. 进入你的 Card Memo 项目。
@@ -116,21 +122,35 @@ MEMO_KV
 MEMO_KV
 ```
 
-可选：如果你不希望任何知道网址的人都能读写你的备忘录，建议再配置一个环境变量：
+## 访问密码配置
+
+必须配置环境变量：
 
 ```text
-MEMO_TOKEN=你自己设置的一串随机密码
+MEMO_PASSWORD=你自己设置的访问密码
 ```
 
-然后在页面的“访问令牌”输入框中填同样的值，并点击“保存令牌”。
+前端不会保存这个密码到代码里。用户打开网页后输入密码，前端会把密码放到请求头：
 
-> 如果你没有配置 `MEMO_TOKEN`，`/api/memos` 将不做令牌校验。个人测试可以这样用，但正式使用不建议公开。
+```text
+X-Memo-Password: 你的密码
+```
+
+Edge Function 会用环境变量 `MEMO_PASSWORD` 校验请求。
+
+兼容旧版本：如果你之前已经配置了 `MEMO_TOKEN`，函数也会兼容读取，但推荐改成 `MEMO_PASSWORD`。
 
 ## Edge Functions 接口
 
 ### GET /api/memos
 
 从 KV 读取所有卡片。
+
+请求需要带请求头：
+
+```text
+X-Memo-Password: 你的密码
+```
 
 返回示例：
 
@@ -147,6 +167,12 @@ MEMO_TOKEN=你自己设置的一串随机密码
 ### PUT /api/memos
 
 把当前卡片列表覆盖保存到 KV。
+
+请求需要带请求头：
+
+```text
+X-Memo-Password: 你的密码
+```
 
 请求示例：
 
@@ -168,12 +194,6 @@ MEMO_TOKEN=你自己设置的一串随机密码
 }
 ```
 
-如果配置了 `MEMO_TOKEN`，请求需要带请求头：
-
-```text
-X-Memo-Token: 你的令牌
-```
-
 ## 打包
 
 ```bash
@@ -188,7 +208,29 @@ dist
 
 ## 部署到 EdgeOne Makers / Pages
 
-推荐用 Git 部署：
+如果你是上传 ZIP 的方式：
+
+1. 进入你的 EdgeOne 项目。
+2. 打开“构建部署 / Deployments”。
+3. 点击“新建部署”。
+4. 上传新版 ZIP。
+5. 部署环境选择“生产环境”。
+6. 开始部署。
+7. 部署完成后，确认绑定 KV：
+
+```text
+变量名：MEMO_KV
+```
+
+8. 配置环境变量：
+
+```text
+MEMO_PASSWORD=你自己的访问密码
+```
+
+9. 重新部署一次。
+
+如果你用 Git 部署：
 
 1. 把项目上传到 GitHub / Gitee / Coding。
 2. 进入 EdgeOne Makers / Pages 控制台。
@@ -205,19 +247,8 @@ npm run build
 dist
 ```
 
-6. 部署完成后，进入项目设置绑定 KV：
-
-```text
-变量名：MEMO_KV
-```
-
-7. 可选配置环境变量：
-
-```text
-MEMO_TOKEN=你自己的访问令牌
-```
-
-8. 重新部署一次。
+6. 部署完成后，绑定 `MEMO_KV` 并配置 `MEMO_PASSWORD`。
+7. 重新部署一次。
 
 ## CLI 部署
 
@@ -243,28 +274,19 @@ npm run edge:deploy
 ## 使用方式
 
 1. 打开页面。
-2. 新增几张卡片。
-3. 点击“推送到云端”，保存到 KV。
-4. 在另一台设备打开同一个网站。
-5. 如果配置了 `MEMO_TOKEN`，先输入访问令牌并保存。
-6. 点击“从云端拉取”，即可同步卡片到当前浏览器。
+2. 输入你在 Pages 环境变量里配置的 `MEMO_PASSWORD`。
+3. 验证通过后进入卡片备忘录。
+4. 新增、编辑、删除、置顶、归档或导入卡片。
+5. 系统会先写入本地 IndexedDB，然后在约 1.2 秒后自动保存到 KV。
+6. 在另一台设备打开同一个网站，输入同一个密码。
+7. 如果本地没有卡片，系统会自动从 KV 恢复。
 
 ## 重要注意事项
 
-1. 当前是“手动同步”，不是自动实时同步。
-2. “推送到云端”会用当前浏览器里的卡片覆盖 KV。
-3. “从云端拉取”会用 KV 里的卡片覆盖当前浏览器。
-4. 操作前建议先导出 JSON 备份。
-5. KV 是最终一致性存储，不适合强一致、多用户并发编辑场景。
-6. 这个版本适合个人备忘录、轻量记录、少量多设备同步。
-
-## 后续可升级方向
-
-- 自动同步
-- 冲突合并
-- 登录系统
-- 每个用户单独一个数据空间
-- 单张卡片分享
-- 回收站
-- Markdown 预览
-- 图片附件
+1. 当前是“自动保存”，不是多人实时协同编辑。
+2. 每次自动保存都会用当前浏览器里的卡片列表覆盖 KV。
+3. 新设备首次打开且本地没有卡片时，会自动从 KV 恢复；为了避免误覆盖，页面不提供手动拉取按钮。
+4. 密码只保存在当前浏览器会话 `sessionStorage` 中，关闭浏览器会话后需要重新输入。
+5. 大量导入或跨设备切换前建议先导出 JSON 备份。
+6. KV 是最终一致性存储，不适合强一致、多用户并发编辑场景。
+7. 这个版本适合个人备忘录、轻量记录、少量多设备同步。
