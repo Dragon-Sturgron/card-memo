@@ -792,3 +792,221 @@ h1 {
     width: 100%;
   }
 }
+
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  outline: none;
+  background: #fff;
+  color: #241c15;
+  box-shadow: inset 0 1px 0 rgba(36, 28, 21, 0.03);
+  font-weight: 700;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.custom-select-trigger span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-trigger:hover,
+.custom-select.open .custom-select-trigger {
+  border-color: rgba(249, 115, 22, 0.56);
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+}
+
+.custom-select-arrow {
+  flex: 0 0 auto;
+  color: #6b5f55;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.custom-select.open .custom-select-arrow {
+  transform: rotate(180deg);
+}
+
+.custom-select-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 90;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid rgba(36, 28, 21, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 44px rgba(36, 28, 21, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.custom-select-option {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: #3f352d;
+  font-weight: 700;
+  text-align: left;
+}
+
+.custom-select-option span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-option:hover {
+  background: #f8f4ec;
+}
+
+.custom-select-option.active {
+  color: #241c15;
+  background: #fde68a;
+}
+
+.custom-select-check {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #241c15;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.confirm-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(36, 28, 21, 0.34);
+  backdrop-filter: blur(12px);
+}
+
+.confirm-dialog {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: #fffaf2;
+  box-shadow: 0 28px 80px rgba(36, 28, 21, 0.28);
+}
+
+.confirm-dialog h2 {
+  margin-bottom: 10px;
+  font-size: 26px;
+  letter-spacing: -0.04em;
+}
+
+.confirm-text {
+  margin-bottom: 24px;
+  color: #6b5f55;
+  line-height: 1.7;
+}
+
+.confirm-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.confirm-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(36, 28, 21, 0.06);
+  color: #241c15;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.confirm-close:hover {
+  background: rgba(36, 28, 21, 0.1);
+}
+
+@media (max-width: 760px) {
+  .custom-select-menu {
+    max-height: 180px;
+  }
+
+  .confirm-footer .primary-button {
+    width: 100%;
+  }
+}
+
+/* Keep the editor footer buttons on one line, especially on narrow screens. */
+.editor-footer {
+  flex-wrap: nowrap;
+}
+
+.editor-footer .secondary-button,
+.editor-footer .primary-button {
+  white-space: nowrap;
+}
+
+.editor-footer .secondary-button {
+  flex: 0 0 auto;
+  min-width: 70px;
+}
+
+.editor-footer .primary-button {
+  flex: 0 1 260px;
+  width: auto;
+}
+
+@media (max-width: 760px) {
+  .editor-footer {
+    gap: 10px;
+  }
+
+  .editor-footer .secondary-button {
+    width: auto;
+    min-width: 64px;
+    padding: 0 14px;
+  }
+
+  .editor-footer .primary-button {
+    width: auto;
+    flex: 1 1 auto;
+    max-width: 320px;
+    min-width: 0;
+    padding: 0 16px;
+  }
+}

@@ -13,6 +13,7 @@ const emit = defineEmits(['back', 'save'])
 
 const rows = ref([])
 const newCategory = ref('')
+const noticeOpen = ref(false)
 
 watch(
   () => props.categories,
@@ -39,7 +40,7 @@ function addCategory() {
 
 function removeCategory(index) {
   if (rows.value.length <= 1) {
-    window.alert('至少需要保留一个分类')
+    noticeOpen.value = true
     return
   }
   rows.value.splice(index, 1)
@@ -123,4 +124,18 @@ function submit() {
       </div>
     </section>
   </section>
+
+  <Teleport to="body">
+    <div v-if="noticeOpen" class="confirm-mask" @click.self="noticeOpen = false">
+      <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="category-notice-title">
+        <button class="confirm-close" aria-label="关闭" @click="noticeOpen = false">×</button>
+        <p class="eyebrow">提示</p>
+        <h2 id="category-notice-title">至少需要保留一个分类</h2>
+        <p class="confirm-text">当前只剩最后一个分类，不能继续删除。你可以先新增其他分类，再删除这个分类。</p>
+        <footer class="confirm-footer">
+          <button class="primary-button" @click="noticeOpen = false">知道了</button>
+        </footer>
+      </section>
+    </div>
+  </Teleport>
 </template>

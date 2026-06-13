@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { CARD_COLORS } from '../utils'
 
 const props = defineProps({
@@ -27,10 +27,39 @@ const form = reactive({
   pinned: false
 })
 
+const categorySelectOpen = ref(false)
+const categorySelectRef = ref(null)
+
 const isEditing = computed(() => Boolean(props.memo?.id))
 const canSave = computed(() => form.title.trim() || form.content.trim())
 const firstCategory = computed(() => props.categories[0] || '')
 const categoryChoices = computed(() => props.categories.map((item) => String(item || '').trim()).filter(Boolean))
+const selectedCategoryText = computed(() => form.category || firstCategory.value || '暂无分类')
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
+})
+
+function handleDocumentClick(event) {
+  if (!categorySelectRef.value) return
+  if (!categorySelectRef.value.contains(event.target)) {
+    categorySelectOpen.value = false
+  }
+}
+
+function toggleCategorySelect() {
+  if (!categoryChoices.value.length) return
+  categorySelectOpen.value = !categorySelectOpen.value
+}
+
+function chooseCategory(category) {
+  form.category = category
+  categorySelectOpen.value = false
+}
 
 watch(
   () => [props.open, props.memo, props.categories],
@@ -42,6 +71,7 @@ watch(
     form.category = categoryChoices.value.includes(candidateCategory) ? candidateCategory : firstCategory.value
     form.color = props.memo.color || CARD_COLORS[0]
     form.pinned = Boolean(props.memo.pinned)
+    categorySelectOpen.value = false
   },
   { immediate: true, deep: true }
 )
@@ -91,11 +121,31 @@ function submit() {
 
         <label class="field-label">
           分类
-          <select v-model="form.category" class="field-input field-select">
-            <option v-for="category in categoryChoices" :key="category" :value="category">
-              {{ category }}
-            </option>
-          </select>
+          <div ref="categorySelectRef" class="custom-select" :class="{ open: categorySelectOpen }">
+            <button
+              type="button"
+              class="custom-select-trigger"
+              :disabled="!categoryChoices.length"
+              @click.stop="toggleCategorySelect"
+            >
+              <span>{{ selectedCategoryText }}</span>
+              <span class="custom-select-arrow">⌄</span>
+            </button>
+
+            <div v-if="categorySelectOpen" class="custom-select-menu">
+              <button
+                v-for="category in categoryChoices"
+                :key="category"
+                type="button"
+                class="custom-select-option"
+                :class="{ active: form.category === category }"
+                @click.stop="chooseCategory(category)"
+              >
+                <span>{{ category }}</span>
+                <span v-if="form.category === category" class="custom-select-check">✓</span>
+              </button>
+            </div>
+          </div>
         </label>
 
         <div class="editor-options">
