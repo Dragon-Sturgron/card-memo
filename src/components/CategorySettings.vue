@@ -29,7 +29,9 @@ const canSave = computed(() => normalizedNames.value.length > 0)
 function addCategory() {
   const value = newCategory.value.trim()
   if (!value) return
-  if (!rows.value.some((row) => row.name.trim() === value)) {
+
+  const existed = rows.value.some((row) => row.name.trim() === value)
+  if (!existed) {
     rows.value.push({ original: '', name: value })
   }
   newCategory.value = ''
@@ -71,7 +73,7 @@ function submit() {
       <button class="secondary-button" @click="emit('back')">返回备忘录</button>
     </header>
 
-    <section class="settings-card">
+    <section class="settings-card category-settings-card">
       <div class="settings-card-header">
         <div>
           <h2>分类列表</h2>
@@ -79,27 +81,42 @@ function submit() {
         </div>
       </div>
 
-      <div class="category-list-editor">
-        <div v-for="(row, index) in rows" :key="`${row.original}-${index}`" class="category-edit-row">
-          <input v-model="row.name" class="field-input" placeholder="分类名称" />
-          <button class="secondary-button small danger-outline" @click="removeCategory(index)">删除</button>
+      <div class="category-grid-editor">
+        <div
+          v-for="(row, index) in rows"
+          :key="`${row.original}-${index}`"
+          class="category-token-editor"
+        >
+          <input
+            v-model="row.name"
+            class="category-token-input"
+            placeholder="分类名称"
+            :title="row.name"
+          />
+          <button
+            class="category-remove-button"
+            title="删除分类"
+            aria-label="删除分类"
+            @click="removeCategory(index)"
+          >
+            ×
+          </button>
         </div>
       </div>
 
-      <div class="category-add-row">
+      <div class="category-settings-bottom">
         <input
           v-model="newCategory"
-          class="field-input"
-          placeholder="新增分类，例如：需求"
+          class="category-new-input"
+          placeholder="请输入内容，回车添加"
           @keydown.enter.prevent="addCategory"
         />
-        <button class="secondary-button" @click="addCategory">添加分类</button>
-      </div>
 
-      <footer class="settings-footer">
-        <button class="secondary-button" @click="emit('back')">取消</button>
-        <button class="primary-button" :disabled="!canSave" @click="submit">保存设置</button>
-      </footer>
+        <div class="settings-footer category-actions-footer">
+          <button class="secondary-button" @click="emit('back')">取消</button>
+          <button class="primary-button" :disabled="!canSave" @click="submit">保存设置</button>
+        </div>
+      </div>
     </section>
   </section>
 </template>

@@ -1,9 +1,9 @@
 {
   "name": "card-memo",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
-  "description": "A card-style memo app with Vue, IndexedDB, category settings page, EdgeOne Edge Functions, KV auto sync, and HttpOnly cookie login.",
+  "description": "A card-style memo app with Vue, compact category settings page, IndexedDB, EdgeOne Edge Functions, KV auto sync, and HttpOnly cookie login.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
