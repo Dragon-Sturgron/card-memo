@@ -195,7 +195,6 @@ async function handleCategoriesSave(payload) {
 
   categories.value = nextCategories
   activeCategory.value = '全部'
-  backToHome()
 
   await replaceMemos(changedMemos)
   await loadMemos()
@@ -350,6 +349,8 @@ function flash(message) {
   </main>
 
   <main v-else-if="appUnlocked" class="app-shell">
+    <p v-if="statusMessage" class="toast">{{ statusMessage }}</p>
+
     <CategorySettings
       v-if="currentPage === 'settings'"
       :categories="categories"
@@ -383,8 +384,6 @@ function flash(message) {
         @settings="openSettingsPage"
         @logout="handleLogout"
       />
-
-      <p v-if="statusMessage" class="toast">{{ statusMessage }}</p>
 
       <EmptyState v-if="!memos.length" @add="openNewMemo" />
 

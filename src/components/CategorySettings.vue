@@ -38,6 +38,10 @@ function addCategory() {
 }
 
 function removeCategory(index) {
+  if (rows.value.length <= 1) {
+    window.alert('至少需要保留一个分类')
+    return
+  }
   rows.value.splice(index, 1)
 }
 
