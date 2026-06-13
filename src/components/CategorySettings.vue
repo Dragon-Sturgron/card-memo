@@ -123,9 +123,25 @@ function submit() {
         </div>
       </div>
 
-      <div class="settings-divider"></div>
+      <div class="category-add-row">
+        <input
+          v-model="newCategory"
+          class="category-new-input"
+          placeholder="请输入内容，回车添加"
+          @keydown.enter.prevent="addCategory"
+        />
+      </div>
+    </section>
 
-      <div class="preference-card">
+    <section class="settings-card preference-settings-card">
+      <div class="settings-card-header">
+        <div>
+          <h2>偏好设置</h2>
+          <p class="settings-help">这里单独维护页面交互类设置。</p>
+        </div>
+      </div>
+
+      <div class="preference-card standalone-preference-card">
         <div>
           <h3>弹窗关闭方式</h3>
           <p>控制新增和编辑卡片时，点击空白区域是否关闭弹窗。</p>
@@ -136,21 +152,12 @@ function submit() {
           <span class="switch-text">允许点击空白处关闭</span>
         </label>
       </div>
-
-      <div class="category-settings-bottom">
-        <input
-          v-model="newCategory"
-          class="category-new-input"
-          placeholder="请输入内容，回车添加"
-          @keydown.enter.prevent="addCategory"
-        />
-
-        <div class="settings-footer category-actions-footer">
-          <button class="secondary-button" @click="emit('back')">取消</button>
-          <button class="primary-button" :disabled="!canSave" @click="submit">保存设置</button>
-        </div>
-      </div>
     </section>
+
+    <div class="settings-page-actions">
+      <button class="secondary-button" @click="emit('back')">取消</button>
+      <button class="primary-button" :disabled="!canSave" @click="submit">保存设置</button>
+    </div>
   </section>
 
   <Teleport to="body">
