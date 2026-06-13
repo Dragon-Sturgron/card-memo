@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import MemoCard from './components/MemoCard.vue'
 import MemoEditor from './components/MemoEditor.vue'
+import MemoDetail from './components/MemoDetail.vue'
 import Toolbar from './components/Toolbar.vue'
 import EmptyState from './components/EmptyState.vue'
 import CategorySettings from './components/CategorySettings.vue'
@@ -15,8 +16,10 @@ const query = ref('')
 const activeCategory = ref('全部')
 const viewMode = ref('active')
 const editorOpen = ref(false)
+const detailOpen = ref(false)
 const currentPage = ref('home')
 const editingMemo = ref(null)
+const viewingMemo = ref(null)
 const statusMessage = ref('')
 const authChecking = ref(true)
 const appUnlocked = ref(false)
@@ -196,6 +199,22 @@ function openNewMemo() {
   editorOpen.value = true
 }
 
+function openDetailMemo(memo) {
+  viewingMemo.value = structuredClone(memo)
+  detailOpen.value = true
+}
+
+function closeDetailMemo() {
+  detailOpen.value = false
+  viewingMemo.value = null
+}
+
+function openEditFromDetail(memo) {
+  detailOpen.value = false
+  viewingMemo.value = null
+  openEditMemo(memo)
+}
+
 function syncPageFromHash() {
   currentPage.value = window.location.hash === '#/settings' ? 'settings' : 'home'
 }
@@ -234,6 +253,7 @@ async function handleSave(memo) {
   await loadMemos()
   editorOpen.value = false
   editingMemo.value = null
+  closeDetailMemo()
   flash('卡片已保存')
   scheduleCloudSave()
 }
@@ -243,6 +263,9 @@ async function togglePin(memo) {
   await saveMemo({ ...memo, pinned: !memo.pinned, updatedAt: now })
   touchLocalChange(now)
   await loadMemos()
+  if (viewingMemo.value?.id === memo.id) {
+    viewingMemo.value = structuredClone(memos.value.find((item) => item.id === memo.id) || { ...memo, pinned: !memo.pinned, updatedAt: now })
+  }
   scheduleCloudSave()
 }
 
@@ -251,6 +274,9 @@ async function toggleArchive(memo) {
   await saveMemo({ ...memo, archived: !memo.archived, updatedAt: now })
   touchLocalChange(now)
   await loadMemos()
+  if (viewingMemo.value?.id === memo.id) {
+    viewingMemo.value = structuredClone(memos.value.find((item) => item.id === memo.id) || { ...memo, archived: !memo.archived, updatedAt: now })
+  }
   flash(memo.archived ? '卡片已恢复' : '卡片已归档')
   scheduleCloudSave()
 }
@@ -262,6 +288,7 @@ async function removeMemo(memo) {
   await deleteMemo(memo.id)
   touchLocalChange()
   await loadMemos()
+  if (viewingMemo.value?.id === memo.id) closeDetailMemo()
   flash('卡片已删除')
   scheduleCloudSave()
 }
@@ -523,6 +550,7 @@ function flash(message) {
           v-for="memo in visibleMemos"
           :key="memo.id"
           :memo="memo"
+          @view="openDetailMemo"
           @edit="openEditMemo"
           @toggle-pin="togglePin"
           @toggle-archive="toggleArchive"
@@ -536,6 +564,16 @@ function flash(message) {
         :categories="categories"
         @close="editorOpen = false"
         @save="handleSave"
+      />
+
+      <MemoDetail
+        :open="detailOpen"
+        :memo="viewingMemo"
+        @close="closeDetailMemo"
+        @edit="openEditFromDetail"
+        @toggle-pin="togglePin"
+        @toggle-archive="toggleArchive"
+        @remove="removeMemo"
       />
     </template>
   </main>
