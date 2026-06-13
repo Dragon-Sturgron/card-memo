@@ -47,7 +47,7 @@ const emit = defineEmits([
       <div class="toolbar-actions">
         <button class="secondary-button" @click="emit('settings')">⚙ 设置</button>
         <button class="secondary-button" @click="emit('logout')">退出</button>
-        <button class="primary-button" @click="emit('add')">+ 新增卡片</button>
+        <button class="primary-button add-card-button" @click="emit('add')">新增卡片</button>
       </div>
     </div>
 

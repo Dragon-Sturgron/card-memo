@@ -25,21 +25,41 @@ const cloudStatus = ref('')
 const cloudPending = ref(false)
 const lastCloudSavedAt = ref('')
 
-const AUTO_SAVE_DELAY = 1200
+const AUTO_SAVE_DELAY = 300
+const CLOUD_REFRESH_MIN_INTERVAL = 1500
+const SYNC_META_KEY = 'card-memo-sync-meta'
 let autoSaveTimer = null
 let isApplyingCloudData = false
 let cloudSaveSequence = 0
+let lastCloudRefreshAt = 0
 
 onMounted(async () => {
   syncPageFromHash()
   window.addEventListener('hashchange', syncPageFromHash)
+  window.addEventListener('focus', handleWindowFocus)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   await bootApp()
 })
 
 onBeforeUnmount(() => {
   if (autoSaveTimer) window.clearTimeout(autoSaveTimer)
   window.removeEventListener('hashchange', syncPageFromHash)
+  window.removeEventListener('focus', handleWindowFocus)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
+
+function handleWindowFocus() {
+  refreshFromCloudIfNeeded()
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) refreshFromCloudIfNeeded()
+}
+
+function refreshFromCloudIfNeeded() {
+  if (!appUnlocked.value || authChecking.value || isApplyingCloudData) return
+  refreshFromCloud({ silent: true })
+}
 
 async function bootApp() {
   authChecking.value = true
@@ -48,7 +68,8 @@ async function bootApp() {
     await checkSession()
     appUnlocked.value = true
     await loadMemos()
-    await initializeFromCloud()
+    ensureLocalMetaFromMemos()
+    await initializeFromCloud({ force: true })
   } catch (error) {
     console.error(error)
     if (error.status === 401) {
@@ -67,6 +88,65 @@ async function bootApp() {
 async function loadMemos() {
   const data = await getAllMemos()
   memos.value = sortMemos(cleanMemoList(data))
+}
+
+function readSyncMeta() {
+  try {
+    const raw = localStorage.getItem(SYNC_META_KEY)
+    return raw ? JSON.parse(raw) || {} : {}
+  } catch (error) {
+    console.warn('读取同步状态失败。', error)
+    return {}
+  }
+}
+
+function writeSyncMeta(patch) {
+  const next = {
+    ...readSyncMeta(),
+    ...patch
+  }
+  localStorage.setItem(SYNC_META_KEY, JSON.stringify(next))
+  return next
+}
+
+function dateValue(value) {
+  const time = Date.parse(value || '')
+  return Number.isFinite(time) ? time : 0
+}
+
+function getLatestMemoUpdatedAt(list = memos.value) {
+  let latest = 0
+  for (const memo of list) {
+    latest = Math.max(latest, dateValue(memo.updatedAt), dateValue(memo.createdAt))
+  }
+  return latest ? new Date(latest).toISOString() : ''
+}
+
+function ensureLocalMetaFromMemos() {
+  const meta = readSyncMeta()
+  if (!meta.localUpdatedAt) {
+    const latest = getLatestMemoUpdatedAt()
+    if (latest) writeSyncMeta({ localUpdatedAt: latest })
+  }
+}
+
+function touchLocalChange(timestamp = new Date().toISOString()) {
+  writeSyncMeta({ localUpdatedAt: timestamp })
+  return timestamp
+}
+
+function markCloudSynced(cloudUpdatedAt = new Date().toISOString()) {
+  writeSyncMeta({
+    localUpdatedAt: cloudUpdatedAt,
+    cloudUpdatedAt,
+    lastSyncedAt: cloudUpdatedAt
+  })
+}
+
+function hasUnsyncedLocalChange(meta = readSyncMeta()) {
+  const localTime = dateValue(meta.localUpdatedAt)
+  const cloudTime = dateValue(meta.cloudUpdatedAt)
+  return Boolean(cloudTime && localTime > cloudTime)
 }
 
 function sortMemos(list) {
@@ -150,6 +230,7 @@ async function handleSave(memo) {
   })
 
   await saveMemo(normalized)
+  touchLocalChange(now)
   await loadMemos()
   editorOpen.value = false
   editingMemo.value = null
@@ -158,13 +239,17 @@ async function handleSave(memo) {
 }
 
 async function togglePin(memo) {
-  await saveMemo({ ...memo, pinned: !memo.pinned, updatedAt: new Date().toISOString() })
+  const now = new Date().toISOString()
+  await saveMemo({ ...memo, pinned: !memo.pinned, updatedAt: now })
+  touchLocalChange(now)
   await loadMemos()
   scheduleCloudSave()
 }
 
 async function toggleArchive(memo) {
-  await saveMemo({ ...memo, archived: !memo.archived, updatedAt: new Date().toISOString() })
+  const now = new Date().toISOString()
+  await saveMemo({ ...memo, archived: !memo.archived, updatedAt: now })
+  touchLocalChange(now)
   await loadMemos()
   flash(memo.archived ? '卡片已恢复' : '卡片已归档')
   scheduleCloudSave()
@@ -175,12 +260,14 @@ async function removeMemo(memo) {
   if (!ok) return
 
   await deleteMemo(memo.id)
+  touchLocalChange()
   await loadMemos()
   flash('卡片已删除')
   scheduleCloudSave()
 }
 
 async function handleCategoriesSave(payload) {
+  const now = new Date().toISOString()
   const nextCategories = saveCategories(payload.categories)
   const fallbackCategory = nextCategories[0] || ''
   const renameMap = payload.renameMap || {}
@@ -190,58 +277,93 @@ async function handleCategoriesSave(payload) {
     if (renameMap[nextCategory]) nextCategory = renameMap[nextCategory]
     if (removed.has(nextCategory)) nextCategory = fallbackCategory
     if (!nextCategory) nextCategory = fallbackCategory
-    return normalizeMemo({ ...memo, category: nextCategory, updatedAt: new Date().toISOString() })
+    return normalizeMemo({ ...memo, category: nextCategory, updatedAt: now })
   })
 
   categories.value = nextCategories
   activeCategory.value = '全部'
 
   await replaceMemos(changedMemos)
+  touchLocalChange(now)
   await loadMemos()
   flash('分类设置已保存')
-  scheduleCloudSave('分类设置已保存，等待自动保存到 KV...')
+  scheduleCloudSave('分类设置已保存，正在同步到 KV...')
 }
 
-async function initializeFromCloud(preloadedResult = null) {
+async function initializeFromCloud(options = {}) {
+  await refreshFromCloud({ initial: true, ...options })
+}
+
+async function refreshFromCloud(options = {}) {
+  if (!appUnlocked.value) return
+
+  const { silent = false, force = false } = options
+  const now = Date.now()
+  if (!force && now - lastCloudRefreshAt < CLOUD_REFRESH_MIN_INTERVAL) return
+
+  lastCloudRefreshAt = now
   cloudLoading.value = true
-  cloudStatus.value = '正在检查云端数据...'
+  if (!silent) cloudStatus.value = '正在检查云端数据...'
 
   try {
-    const result = preloadedResult || (await fetchCloudData())
-    const cloudCategories = normalizeCategories(result?.data?.categories || [])
+    const result = await fetchCloudData()
+    const payload = result?.data || {}
+    const cloudUpdatedAt = payload.updatedAt || ''
+    const cloudTime = dateValue(cloudUpdatedAt)
+    const cloudCategories = normalizeCategories(payload.categories || [])
+    const cloudMemos = cleanMemoList(payload.memos || [])
 
-    if (cloudCategories.length) {
-      categories.value = saveCategories(cloudCategories)
-    }
+    const meta = readSyncMeta()
+    const knownCloudTime = dateValue(meta.cloudUpdatedAt)
+    const localTime = dateValue(meta.localUpdatedAt || getLatestMemoUpdatedAt())
+    const localHasUnsyncedChange = hasUnsyncedLocalChange(meta)
+    const cloudIsNewerThanKnown = cloudTime && cloudTime > knownCloudTime
+    const cloudIsNewerThanLocal = cloudTime && cloudTime >= localTime
 
-    const cloudMemos = cleanMemoList(result?.data?.memos || [])
-
-    if (cloudMemos.length && memos.value.length === 0) {
-      await applyCloudData(cloudMemos, cloudCategories)
-      cloudStatus.value = `已自动从 KV 恢复 ${cloudMemos.length} 张卡片。后续修改会自动保存。`
-      flash('已从云端恢复卡片')
+    if (cloudTime && cloudIsNewerThanKnown && (!localHasUnsyncedChange || cloudIsNewerThanLocal)) {
+      await applyCloudData(cloudMemos, cloudCategories, cloudUpdatedAt)
+      cloudStatus.value = cloudMemos.length
+        ? `已同步云端最新数据：${cloudMemos.length} 张卡片。`
+        : '已同步云端最新数据。'
+      if (!silent) flash('已同步云端最新数据')
       return
     }
 
-    if (!cloudMemos.length && memos.value.length) {
-      scheduleCloudSave('云端暂无卡片，等待自动把当前本地卡片保存到 KV...')
-    } else {
-      cloudStatus.value = '自动保存已开启。'
+    if (!cloudTime && memos.value.length) {
+      scheduleCloudSave('云端暂无数据，正在自动上传本地数据...')
+      return
     }
+
+    if (localHasUnsyncedChange && (!cloudTime || localTime > cloudTime)) {
+      scheduleCloudSave('检测到本地有未同步修改，正在自动上传到 KV...')
+      return
+    }
+
+    if (cloudTime && cloudIsNewerThanKnown && localHasUnsyncedChange) {
+      cloudStatus.value = '云端有更新，但本地也有未同步修改，暂未覆盖本地内容。'
+      if (!silent) flash('本地和云端都有修改，已保留本地内容')
+      return
+    }
+
+    if (cloudTime && cloudIsNewerThanKnown) {
+      writeSyncMeta({ cloudUpdatedAt })
+    }
+
+    cloudStatus.value = '自动同步已开启。'
   } catch (error) {
     console.error(error)
     if (error.status === 401) {
       redirectToLogin()
       return
     }
-    cloudStatus.value = `自动保存未连接：${error.message}`
-    flash(`云端同步异常：${error.message}`)
+    cloudStatus.value = `自动同步未连接：${error.message}`
+    if (!silent) flash(`云端同步异常：${error.message}`)
   } finally {
     cloudLoading.value = false
   }
 }
 
-async function applyCloudData(cloudMemos, cloudCategories = []) {
+async function applyCloudData(cloudMemos, cloudCategories = [], cloudUpdatedAt = '') {
   isApplyingCloudData = true
   try {
     if (cloudCategories.length) {
@@ -251,6 +373,7 @@ async function applyCloudData(cloudMemos, cloudCategories = []) {
     await loadMemos()
     activeCategory.value = '全部'
     viewMode.value = 'active'
+    markCloudSynced(cloudUpdatedAt || getLatestMemoUpdatedAt(cloudMemos) || new Date().toISOString())
   } finally {
     isApplyingCloudData = false
   }
@@ -290,7 +413,9 @@ async function saveToCloudNow(options = {}) {
     const result = await pushCloudData(snapshot)
     if (currentSequence !== cloudSaveSequence) return
 
-    lastCloudSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    const serverUpdatedAt = result?.data?.updatedAt || new Date().toISOString()
+    markCloudSynced(serverUpdatedAt)
+    lastCloudSavedAt.value = new Date(serverUpdatedAt).toLocaleTimeString('zh-CN', { hour12: false })
     cloudStatus.value = `已自动保存 ${result?.data?.count ?? snapshot.memos.length} 张卡片到 KV（${lastCloudSavedAt.value}）。`
     flash('已保存到云端')
   } catch (error) {

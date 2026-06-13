@@ -175,6 +175,10 @@ h1 {
   font-weight: 800;
 }
 
+.add-card-button {
+  white-space: nowrap;
+}
+
 .secondary-button {
   display: inline-flex;
   align-items: center;
@@ -708,6 +712,12 @@ h1 {
   .toolbar-actions .secondary-button,
   .toolbar-actions .primary-button {
     flex: 1;
+    white-space: nowrap;
+  }
+
+  .toolbar-actions .add-card-button {
+    flex: 1.15;
+    padding: 0 12px;
   }
 
   .category-grid-editor {

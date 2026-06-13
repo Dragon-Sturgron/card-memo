@@ -38,11 +38,13 @@ export async function checkSession() {
 }
 
 export async function fetchCloudData() {
-  const response = await fetch(MEMOS_API_URL, {
+  const response = await fetch(`${MEMOS_API_URL}?_=${Date.now()}`, {
     method: 'GET',
     credentials: 'same-origin',
+    cache: 'no-store',
     headers: {
-      Accept: 'application/json'
+      Accept: 'application/json',
+      'Cache-Control': 'no-cache'
     }
   })
 
@@ -50,12 +52,14 @@ export async function fetchCloudData() {
 }
 
 export async function pushCloudData({ memos, categories }) {
-  const response = await fetch(MEMOS_API_URL, {
+  const response = await fetch(`${MEMOS_API_URL}?_=${Date.now()}`, {
     method: 'PUT',
     credentials: 'same-origin',
+    cache: 'no-store',
     headers: {
       Accept: 'application/json',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache'
     },
     body: JSON.stringify({ memos, categories })
   })

@@ -11,7 +11,7 @@
 - 独立分类设置页面
 - 紧凑宫格分类维护，回车快速新增分类
 - IndexedDB 本地缓存
-- Edge Functions + KV 自动保存
+- Edge Functions + KV 自动保存与刷新拉取
 - `/login` 登录页
 - HttpOnly Cookie 登录态
 - `/logout` 退出登录
@@ -118,7 +118,7 @@ HttpOnly; SameSite=Strict; Path=/; Max-Age=7天
 
 ## 自动同步逻辑
 
-这些操作会自动保存到本地 IndexedDB，并在 1.2 秒防抖后自动同步到 KV：
+这些操作会自动保存到本地 IndexedDB，并在约 0.3 秒防抖后自动同步到 KV：
 
 ```text
 新增卡片
@@ -129,7 +129,7 @@ HttpOnly; SameSite=Strict; Path=/; Max-Age=7天
 修改分类设置
 ```
 
-首次登录时，如果本地没有卡片但 KV 里有数据，会自动从 KV 恢复。
+每次进入页面、刷新页面、切回页面时，都会检查 KV 的云端更新时间；如果云端版本更新，会自动覆盖为云端最新数据。这样 A 设备保存后，B 设备刷新页面即可尽快拉取最新数据。
 
 ## 路由说明
 
