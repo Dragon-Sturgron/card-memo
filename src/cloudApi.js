@@ -51,7 +51,7 @@ export async function fetchCloudData() {
   return parseResponse(response)
 }
 
-export async function pushCloudData({ memos, categories }) {
+export async function pushCloudData({ memos, categories, preferences }) {
   const response = await fetch(`${MEMOS_API_URL}?_=${Date.now()}`, {
     method: 'PUT',
     credentials: 'same-origin',
@@ -61,7 +61,7 @@ export async function pushCloudData({ memos, categories }) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     },
-    body: JSON.stringify({ memos, categories })
+    body: JSON.stringify({ memos, categories, preferences })
   })
 
   return parseResponse(response)

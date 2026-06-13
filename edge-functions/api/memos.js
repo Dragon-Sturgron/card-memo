@@ -3,6 +3,10 @@ const MAX_MEMOS = 5000
 const MAX_CATEGORIES = 200
 const AUTH_COOKIE_NAME = 'memo_auth'
 
+const DEFAULT_PREFERENCES = {
+  closeEditorOnBackdrop: false
+}
+
 async function handleRequest(context) {
   const request = context.request
 
@@ -41,6 +45,7 @@ async function handleRequest(context) {
 
       const memos = normalizeMemos(body.memos)
       const categories = normalizeCategories(body.categories || [])
+      const preferences = normalizePreferences(body.preferences || {})
 
       if (memos.length > MAX_MEMOS) {
         return json({ success: false, message: `单次最多同步 ${MAX_MEMOS} 张卡片。` }, 400)
@@ -55,6 +60,7 @@ async function handleRequest(context) {
         version: 3,
         updatedAt: new Date().toISOString(),
         categories,
+        preferences,
         memos
       }
 
@@ -65,7 +71,8 @@ async function handleRequest(context) {
         data: {
           updatedAt: payload.updatedAt,
           count: memos.length,
-          categoryCount: categories.length
+          categoryCount: categories.length,
+          preferences
         }
       })
     }
@@ -166,6 +173,7 @@ function normalizePayload(data) {
     version: Number(data?.version || 1),
     updatedAt: data?.updatedAt || null,
     categories: normalizeCategories(data?.categories || []),
+    preferences: normalizePreferences(data?.preferences || {}),
     memos: normalizeMemos(data?.memos || [])
   }
 }
@@ -179,6 +187,14 @@ function normalizeCategories(input) {
         .slice(0, MAX_CATEGORIES)
     )
   ]
+}
+
+function normalizePreferences(input) {
+  const source = input && typeof input === 'object' ? input : {}
+  return {
+    ...DEFAULT_PREFERENCES,
+    closeEditorOnBackdrop: Boolean(source.closeEditorOnBackdrop)
+  }
 }
 
 function normalizeMemos(input) {

@@ -8,10 +8,11 @@ import EmptyState from './components/EmptyState.vue'
 import CategorySettings from './components/CategorySettings.vue'
 import { deleteMemo, getAllMemos, replaceMemos, saveMemo } from './db'
 import { checkSession, fetchCloudData, logout, pushCloudData, redirectToLogin } from './cloudApi'
-import { createMemoDraft, loadCategories, normalizeCategories, saveCategories } from './utils'
+import { createMemoDraft, loadCategories, loadPreferences, normalizeCategories, normalizePreferences, saveCategories, savePreferences } from './utils'
 
 const memos = ref([])
 const categories = ref(loadCategories())
+const preferences = ref(loadPreferences())
 const query = ref('')
 const activeCategory = ref('全部')
 const viewMode = ref('active')
@@ -314,6 +315,7 @@ async function confirmDeleteMemo() {
 async function handleCategoriesSave(payload) {
   const now = new Date().toISOString()
   const nextCategories = saveCategories(payload.categories)
+  const nextPreferences = savePreferences(payload.preferences || preferences.value)
   const fallbackCategory = nextCategories[0] || ''
   const renameMap = payload.renameMap || {}
   const removed = new Set(payload.removed || [])
@@ -326,6 +328,7 @@ async function handleCategoriesSave(payload) {
   })
 
   categories.value = nextCategories
+  preferences.value = nextPreferences
   activeCategory.value = '全部'
 
   await replaceMemos(changedMemos)
@@ -356,6 +359,7 @@ async function refreshFromCloud(options = {}) {
     const cloudUpdatedAt = payload.updatedAt || ''
     const cloudTime = dateValue(cloudUpdatedAt)
     const cloudCategories = normalizeCategories(payload.categories || [])
+    const cloudPreferences = normalizePreferences(payload.preferences || {})
     const cloudMemos = cleanMemoList(payload.memos || [])
 
     const meta = readSyncMeta()
@@ -366,7 +370,7 @@ async function refreshFromCloud(options = {}) {
     const cloudIsNewerThanLocal = cloudTime && cloudTime >= localTime
 
     if (cloudTime && cloudIsNewerThanKnown && (!localHasUnsyncedChange || cloudIsNewerThanLocal)) {
-      await applyCloudData(cloudMemos, cloudCategories, cloudUpdatedAt)
+      await applyCloudData(cloudMemos, cloudCategories, cloudPreferences, cloudUpdatedAt)
       cloudStatus.value = cloudMemos.length
         ? `已同步云端最新数据：${cloudMemos.length} 张卡片。`
         : '已同步云端最新数据。'
@@ -408,11 +412,14 @@ async function refreshFromCloud(options = {}) {
   }
 }
 
-async function applyCloudData(cloudMemos, cloudCategories = [], cloudUpdatedAt = '') {
+async function applyCloudData(cloudMemos, cloudCategories = [], cloudPreferences = null, cloudUpdatedAt = '') {
   isApplyingCloudData = true
   try {
     if (cloudCategories.length) {
       categories.value = saveCategories(cloudCategories)
+    }
+    if (cloudPreferences) {
+      preferences.value = savePreferences(cloudPreferences)
     }
     await replaceMemos(cloudMemos)
     await loadMemos()
@@ -446,7 +453,8 @@ async function saveToCloudNow(options = {}) {
   const currentSequence = ++cloudSaveSequence
   const snapshot = {
     memos: memos.value.map((memo) => ({ ...memo })),
-    categories: [...categories.value]
+    categories: [...categories.value],
+    preferences: { ...preferences.value }
   }
   const automatic = options.automatic !== false
 
@@ -524,6 +532,7 @@ function flash(message) {
     <CategorySettings
       v-if="currentPage === 'settings'"
       :categories="categories"
+      :preferences="preferences"
       @back="backToHome"
       @save="handleCategoriesSave"
     />
@@ -580,6 +589,7 @@ function flash(message) {
         :open="editorOpen"
         :memo="editingMemo"
         :categories="categories"
+        :allow-backdrop-close="preferences.closeEditorOnBackdrop"
         @close="editorOpen = false"
         @save="handleSave"
       />

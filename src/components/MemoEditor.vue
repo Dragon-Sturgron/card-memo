@@ -14,6 +14,10 @@ const props = defineProps({
   categories: {
     type: Array,
     default: () => []
+  },
+  allowBackdropClose: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -76,6 +80,10 @@ watch(
   { immediate: true, deep: true }
 )
 
+function handleMaskClick() {
+  if (props.allowBackdropClose) emit('close')
+}
+
 function submit() {
   if (!canSave.value) return
 
@@ -93,7 +101,7 @@ function submit() {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-mask" @click.self="emit('close')">
+    <div v-if="open" class="modal-mask" @click.self="handleMaskClick">
       <section class="editor-panel">
         <header class="editor-header">
           <div>

@@ -1,11 +1,15 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { normalizeCategories } from '../utils'
+import { normalizeCategories, normalizePreferences } from '../utils'
 
 const props = defineProps({
   categories: {
     type: Array,
     default: () => []
+  },
+  preferences: {
+    type: Object,
+    default: () => ({})
   }
 })
 
@@ -14,12 +18,21 @@ const emit = defineEmits(['back', 'save'])
 const rows = ref([])
 const newCategory = ref('')
 const noticeOpen = ref(false)
+const localPreferences = ref(normalizePreferences(props.preferences))
 
 watch(
   () => props.categories,
   () => {
     rows.value = props.categories.map((name) => ({ original: name, name }))
     newCategory.value = ''
+  },
+  { immediate: true, deep: true }
+)
+
+watch(
+  () => props.preferences,
+  () => {
+    localPreferences.value = normalizePreferences(props.preferences)
   },
   { immediate: true, deep: true }
 )
@@ -62,7 +75,8 @@ function submit() {
   emit('save', {
     categories,
     renameMap,
-    removed
+    removed,
+    preferences: normalizePreferences(localPreferences.value)
   })
 }
 </script>
@@ -107,6 +121,20 @@ function submit() {
             ×
           </button>
         </div>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="preference-card">
+        <div>
+          <h3>弹窗关闭方式</h3>
+          <p>控制新增和编辑卡片时，点击空白区域是否关闭弹窗。</p>
+        </div>
+        <label class="switch-row">
+          <input v-model="localPreferences.closeEditorOnBackdrop" type="checkbox" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+          <span class="switch-text">允许点击空白处关闭</span>
+        </label>
       </div>
 
       <div class="category-settings-bottom">
