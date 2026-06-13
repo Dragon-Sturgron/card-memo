@@ -1133,3 +1133,60 @@ h1 {
     padding-right: 12px;
   }
 }
+
+.delete-confirm-dialog {
+  text-align: center;
+}
+
+.delete-confirm-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 22px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 28px;
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.1);
+}
+
+.danger-eyebrow {
+  color: #dc2626;
+}
+
+.confirm-footer-split {
+  justify-content: center;
+  gap: 12px;
+}
+
+.danger-button {
+  min-height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 900;
+  box-shadow: 0 16px 30px rgba(220, 38, 38, 0.22);
+}
+
+.danger-button:hover {
+  transform: translateY(-1px);
+  background: #b91c1c;
+}
+
+@media (max-width: 520px) {
+  .confirm-footer-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .confirm-footer-split .secondary-button,
+  .confirm-footer-split .danger-button {
+    width: 100%;
+    padding-left: 12px;
+    padding-right: 12px;
+    white-space: nowrap;
+  }
+}

@@ -27,6 +27,8 @@ const cloudLoading = ref(false)
 const cloudStatus = ref('')
 const cloudPending = ref(false)
 const lastCloudSavedAt = ref('')
+const deleteConfirmOpen = ref(false)
+const deletingMemo = ref(null)
 
 const AUTO_SAVE_DELAY = 300
 const CLOUD_REFRESH_MIN_INTERVAL = 1500
@@ -192,6 +194,11 @@ const categoryOptions = computed(() => {
   return [...defined, ...extra]
 })
 
+function cloneMemo(memo) {
+  if (!memo) return null
+  return JSON.parse(JSON.stringify(memo))
+}
+
 function openNewMemo() {
   const draft = createMemoDraft()
   draft.category = categories.value[0] || ''
@@ -200,7 +207,7 @@ function openNewMemo() {
 }
 
 function openDetailMemo(memo) {
-  viewingMemo.value = structuredClone(memo)
+  viewingMemo.value = cloneMemo(memo)
   detailOpen.value = true
 }
 
@@ -232,7 +239,7 @@ function backToHome() {
 }
 
 function openEditMemo(memo) {
-  editingMemo.value = structuredClone(memo)
+  editingMemo.value = cloneMemo(memo)
   editorOpen.value = true
 }
 
@@ -264,7 +271,7 @@ async function togglePin(memo) {
   touchLocalChange(now)
   await loadMemos()
   if (viewingMemo.value?.id === memo.id) {
-    viewingMemo.value = structuredClone(memos.value.find((item) => item.id === memo.id) || { ...memo, pinned: !memo.pinned, updatedAt: now })
+    viewingMemo.value = cloneMemo(memos.value.find((item) => item.id === memo.id) || { ...cloneMemo(memo), pinned: !memo.pinned, updatedAt: now })
   }
   scheduleCloudSave()
 }
@@ -275,20 +282,31 @@ async function toggleArchive(memo) {
   touchLocalChange(now)
   await loadMemos()
   if (viewingMemo.value?.id === memo.id) {
-    viewingMemo.value = structuredClone(memos.value.find((item) => item.id === memo.id) || { ...memo, archived: !memo.archived, updatedAt: now })
+    viewingMemo.value = cloneMemo(memos.value.find((item) => item.id === memo.id) || { ...cloneMemo(memo), archived: !memo.archived, updatedAt: now })
   }
   flash(memo.archived ? '卡片已恢复' : '卡片已归档')
   scheduleCloudSave()
 }
 
-async function removeMemo(memo) {
-  const ok = window.confirm(`确定删除${memo.title ? `「${memo.title}」` : '这张卡片'}吗？删除后不可恢复。`)
-  if (!ok) return
+function removeMemo(memo) {
+  deletingMemo.value = cloneMemo(memo)
+  deleteConfirmOpen.value = true
+}
+
+function cancelDeleteMemo() {
+  deleteConfirmOpen.value = false
+  deletingMemo.value = null
+}
+
+async function confirmDeleteMemo() {
+  const memo = deletingMemo.value
+  if (!memo?.id) return cancelDeleteMemo()
 
   await deleteMemo(memo.id)
   touchLocalChange()
   await loadMemos()
   if (viewingMemo.value?.id === memo.id) closeDetailMemo()
+  cancelDeleteMemo()
   flash('卡片已删除')
   scheduleCloudSave()
 }
@@ -575,6 +593,24 @@ function flash(message) {
         @toggle-archive="toggleArchive"
         @remove="removeMemo"
       />
+
+      <Teleport to="body">
+        <div v-if="deleteConfirmOpen" class="confirm-mask" @click.self="cancelDeleteMemo">
+          <section class="confirm-dialog delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+            <button class="confirm-close" aria-label="关闭" @click="cancelDeleteMemo">×</button>
+            <div class="delete-confirm-icon">🗑️</div>
+            <p class="eyebrow danger-eyebrow">删除卡片</p>
+            <h2 id="delete-confirm-title">确定删除这张卡片？</h2>
+            <p class="confirm-text">
+              {{ deletingMemo?.title ? `「${deletingMemo.title}」` : '这张卡片' }} 删除后不可恢复，且会自动同步到 KV。
+            </p>
+            <footer class="confirm-footer confirm-footer-split">
+              <button class="secondary-button" @click="cancelDeleteMemo">取消</button>
+              <button class="danger-button" @click="confirmDeleteMemo">确认删除</button>
+            </footer>
+          </section>
+        </div>
+      </Teleport>
     </template>
   </main>
 </template>

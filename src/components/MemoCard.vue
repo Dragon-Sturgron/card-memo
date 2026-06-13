@@ -40,6 +40,7 @@ const shortContent = computed(() => {
     <div class="card-footer">
       <span>{{ formatDate(memo.updatedAt) }}</span>
       <div class="card-actions">
+        <button class="text-button" @click.stop="emit('view', memo)">详情</button>
         <button class="text-button" @click.stop="emit('edit', memo)">修改</button>
         <button class="text-button" @click.stop="emit('toggle-archive', memo)">
           {{ memo.archived ? '恢复' : '归档' }}
