@@ -31,7 +31,9 @@ const shortContent = computed(() => {
       </button>
     </div>
 
-    <p class="card-content">{{ shortContent || '点击查看这张卡片。' }}</p>
+    <div class="card-body-scroll">
+      <p class="card-content">{{ shortContent || '点击查看这张卡片。' }}</p>
+    </div>
 
     <div v-if="memo.category" class="tag-row">
       <span class="tag">{{ memo.category }}</span>
